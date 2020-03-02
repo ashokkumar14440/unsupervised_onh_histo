@@ -1,0 +1,22 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema",
+  "properties": {
+    "value_config": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 0
+    },
+    "dict_config": {
+      "type": "object",
+      "properties": {
+        "one": { "type": "integer", "minimum": 1, "maximum": 1 },
+        "two": { "type": "integer", "minimum": 2, "maximum": 2 }
+      },
+      "additionalProperties": false
+    },
+    "list_config": {
+      "type": "array",
+      "enum": [[3, 4]]
+    }
+  }
+}
