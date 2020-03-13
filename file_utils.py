@@ -85,7 +85,7 @@ def get_contents(
 
 
 def generate_file_names(
-    name: PathLike,
+    name: Optional[PathLike] = None,
     ext: Optional[str] = None,
     indices: Optional[Iterable[Any]] = None,
     delimiter: str = "_",
@@ -129,15 +129,27 @@ def generate_file_names(
     parts, indices (one per file name), and extension, in that order. OS-level
     validity of the resulting paths is not checked!
     """
-    if ext is not None:
-        ext = str(_normalize_ext(ext))
-    else:
+    if name is None and indices is None:
+        raise ValueError("At least one of name or indices must not be None.")
+
+    if ext is None or str(ext).lstrip(".") == "":
         ext = ""
+    else:
+        ext = str(_normalize_ext(ext))
+
+    if name is None or name == "":
+        index_fn = lambda x: [x]
+    else:
+        index_fn = lambda x: [name, x]
+
     if indices is not None:
         indices = [str(i) for i in indices]
-        names = [delimiter.join([name, index]) + ext for index in indices]
-    else:
+        names = [delimiter.join(index_fn(index)) + ext for index in indices]
+    elif name is not None:
         names = [str(name) + ext]
+    else:
+        assert False
+
     names = [PurePath(f) for f in names]
     if folder is not None:
         names = [PurePath(folder) / fn for fn in names]
@@ -197,11 +209,14 @@ class Files:
     def __init__(
         self,
         root_folder: PathLike,
-        base_name: str,
+        base_name: Optional[str] = None,
         ext: Optional[str] = None,
         delimiter: str = "_",
         allowed_delimiters: Sequence[str] = ["_", "-", " "],
     ):
+        if base_name == "":
+            base_name = None
+
         self._root = PurePath(root_folder)
         self._base = base_name
         self._ext = ext
@@ -234,7 +249,9 @@ class Files:
         return self._base
 
     @name.setter
-    def name(self, value: str):
+    def name(self, value: Optional[str]):
+        if value == "":
+            value = None
         self._base = value
         self._fix_delimiters()
 
@@ -252,7 +269,10 @@ class Files:
         """Appends a suffix to the base name, joined with delimiter.
         """
         f = self._copy()
-        f._base = f._delimiter.join([f._base, suffix])
+        if f._base is not None:
+            f._base = f._delimiter.join([f._base, suffix])
+        else:
+            f._base = suffix
         return f
 
     def __truediv__(self, sub: PathLike):
@@ -282,9 +302,9 @@ class Files:
             ext = self._ext
         return generate_file_names(
             name=self._base,
-            folder=self._root,
+            folder=self.root,
             ext=ext,
-            delimiter=self._delimiter,
+            delimiter=self.delimiter,
             *args,
             **kwargs
         )
@@ -293,10 +313,11 @@ class Files:
         return Files(self._root, self._base, self._ext, self._delimiter)
 
     def _fix_delimiters(self):
-        self._base = str(
-            fix_delimiters(
-                self._base,
-                out_delimiter=self._delimiter,
-                recognized_delimiters=self._allowed_delimiters,
+        if self._base is not None:
+            self._base = str(
+                fix_delimiters(
+                    self._base,
+                    out_delimiter=self.delimiter,
+                    recognized_delimiters=self._allowed_delimiters,
+                )
             )
-        )
