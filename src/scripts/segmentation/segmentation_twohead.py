@@ -1,6 +1,7 @@
 import pickle
 import sys
 from datetime import datetime
+from pathlib import Path, PurePath
 from types import SimpleNamespace
 
 import matplotlib
@@ -23,7 +24,7 @@ from src.utils.segmentation.IID_losses import (
 from src.utils.segmentation.data import segmentation_create_dataloaders
 from src.utils.segmentation.general import set_segmentation_input_channels
 
-from .utils import transfer_images, sobelize, process, compute_losses
+from utils import transfer_images, sobelize, process, compute_losses
 
 """
   Fully unsupervised clustering for segmentation ("IIC" = "IID").
@@ -40,7 +41,7 @@ config = SimpleNamespace(**config)
 
 # Setup ------------------------------------------------------------------------
 
-config.out_dir = os.path.join(config.out_root, str(config.model_ind))
+config.out_dir = str(Path(config.out_root).resolve() / str(config.model_ind))
 config.dataloader_batch_sz = int(config.batch_sz / config.num_dataloaders)
 assert config.mode == "IID"
 assert "TwoHead" in config.arch
@@ -88,7 +89,7 @@ def train():
     if config.restart:
         assert dict_name is not None
         dict = torch.load(
-            os.path.join(config.out_dir, dict_name),
+            str(PurePath(config.out_dir / dict_name)),
             map_location=lambda storage, loc: storage,
         )
         net.load_state_dict(dict["net"])
