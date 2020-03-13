@@ -1,10 +1,13 @@
+import pickle
+
 import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-
 import torch
+import pandas as pd
 
+from inc.python_file_utilities.file_utils import *
 from src.utils.cluster.transforms import sobel_process
 
 
@@ -160,6 +163,60 @@ class Canvas:
         self._axarr[index].clear()
         self._axarr[index].plot(config.__dict__[self._FIELDS[index]])
         self._axarr[index].set_title(self._TITLES[index])
+
+
+class Model:
+    def __init__(self, state_files):
+        pass
+
+    @property
+    def finished(self):
+        pass
+
+    def process_epoch(self):
+        pass
+
+    def _process_head(self):
+        pass
+
+    def _process_batch(self):
+        pass
+
+    def _print_status(self):
+        pass
+
+
+class BatchStatistics:
+    # TODO replaces b_i, avg_loss, avg_loss_no_lamb, avg_loss_count
+    def __init__(self, loss_names: Sequence[str]):
+        self._data = pd.DataFrame(columns=loss_names)
+
+    @property
+    def count(self):
+        return len(self._data)
+
+    def add(self, loss_values: dict):
+        assert set(loss_values.keys()) == set(self._data.columns)
+        self._data.loc[self.count] = loss_values
+
+    def get_means(self):
+        return dict(self._data.mean())
+
+
+class EpochStatistics:
+    # TODO replaces epoch_acc, epoch_avg_subhead_acc, epoch_stats
+    # TODO epoch_loss_head_A, epoch_loss_no_lamb_head_A
+    # TODO epoch_loss_head_B, epoch_loss_no_lamb_head_B
+    # TODO all above are config.*
+    # TODO epoch_loss, epoch_loss_no_lamb
+    def __init__(self):
+        pass
+
+    def add(self, batch_values):
+        pass
+
+    def print(self):
+        pass
 
 
 class StateFiles:
