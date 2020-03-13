@@ -1,3 +1,8 @@
+import matplotlib
+
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+
 import torch
 
 from src.utils.cluster.transforms import sobel_process
@@ -116,3 +121,40 @@ def get_channel_count(config):
 
 def get_dataloader_batch_size(loader_tuple):
     return loader_tuple[0][0].shape[0]
+
+
+class Canvas:
+    COUNT = 6
+    TITLES = [
+        "Accuracy, Best (Top: {top:.3f})",
+        "Accuracy, Average (Top: {top:.3f})",
+        "Loss, Head A",
+        "Loss, Head A, No Lamb",
+        "Loss, Head B",
+        "Loss, Head B, No Lamb",
+    ]
+    FIELDS = [
+        "epoch_acc",
+        "epoch_avg_subhead_acc",
+        "epoch_loss_head_A",
+        "epoch_loss_no_lamb_head_A",
+        "epoch_loss_head_B",
+        "epoch_loss_no_lamb_head_B",
+    ]
+
+    def __init__(self):
+        assert self.COUNT == len(self.TITLES) == len(self.FIELDS)
+        self.fig, self.axarr = plt.subplots(self.COUNT, sharex=False, figsize=(20, 20))
+
+    def draw(self, config):
+        for index in range(self.COUNT):
+            self._draw_plot(config, index)
+        self.fig.canvas.draw_idle()
+
+    def save(self, file_path):
+        self.fig.savefig(file_path)
+
+    def _draw_plot(self, config, index):
+        self.axarr[index].clear()
+        self.axarr[index].plot(config.__dict__[self.FIELDS[index]])
+        self.axarr[index].set_title(self.TITLES[index])

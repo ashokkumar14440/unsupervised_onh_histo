@@ -4,12 +4,9 @@ from datetime import datetime
 from pathlib import Path, PurePath
 from types import SimpleNamespace
 
-import matplotlib
 import numpy as np
 import torch
 
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
 import os
 
 from inc.config_snake.config import ConfigFile
@@ -24,7 +21,7 @@ from src.utils.segmentation.IID_losses import (
 from src.utils.segmentation.data import segmentation_create_dataloaders
 from src.utils.segmentation.general import set_segmentation_input_channels
 
-from utils import transfer_images, sobelize, process, compute_losses
+from utils import transfer_images, sobelize, process, compute_losses, Canvas
 
 """
   Fully unsupervised clustering for segmentation ("IIC" = "IID").
@@ -43,11 +40,15 @@ config = SimpleNamespace(**config)
 
 config.out_dir = str(Path(config.out_root).resolve() / str(config.model_ind))
 config.dataloader_batch_sz = int(config.batch_sz / config.num_dataloaders)
+
 assert config.mode == "IID"
 assert "TwoHead" in config.arch
 assert config.output_k_B == config.gt_k
+
 config.output_k = config.output_k_B  # for eval code
+
 assert config.output_k_A >= config.gt_k  # sanity
+
 config.use_doersch_datasets = False
 config.eval_mode = "hung"
 set_segmentation_input_channels(config)
@@ -149,7 +150,7 @@ def train():
         sys.stdout.flush()
         next_epoch = 1
 
-    fig, axarr = plt.subplots(6, sharex=False, figsize=(20, 20))
+    canvas = Canvas()
 
     if not config.use_uncollapsed_loss:
         print("using condensed loss (default)")
@@ -261,32 +262,11 @@ def train():
         print("Pre: time %s: \n %s" % (datetime.now(), nice(config.epoch_stats[-1])))
         sys.stdout.flush()
 
-        axarr[0].clear()
-        axarr[0].plot(config.epoch_acc)
-        axarr[0].set_title("acc (best), top: %f" % max(config.epoch_acc))
-
-        axarr[1].clear()
-        axarr[1].plot(config.epoch_avg_subhead_acc)
-        axarr[1].set_title("acc (avg), top: %f" % max(config.epoch_avg_subhead_acc))
-
-        axarr[2].clear()
-        axarr[2].plot(config.epoch_loss_head_A)
-        axarr[2].set_title("Loss head A")
-
-        axarr[3].clear()
-        axarr[3].plot(config.epoch_loss_no_lamb_head_A)
-        axarr[3].set_title("Loss no lamb head A")
-
-        axarr[4].clear()
-        axarr[4].plot(config.epoch_loss_head_B)
-        axarr[4].set_title("Loss head B")
-
-        axarr[5].clear()
-        axarr[5].plot(config.epoch_loss_no_lamb_head_B)
-        axarr[5].set_title("Loss no lamb head B")
-
-        fig.canvas.draw_idle()
-        fig.savefig(os.path.join(config.out_dir, "plots.png"))
+        canvas.draw(config)
+        name = PurePath(config.plot_name)
+        if not name.suffix:
+            name = name.with_suffix(".png")
+        canvas.save(PurePath(config.out_dir) / name)
 
         if is_best or (e_i % config.save_freq == 0):
             net.module.cpu()
