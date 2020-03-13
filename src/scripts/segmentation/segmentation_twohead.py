@@ -1,6 +1,7 @@
 import pickle
 import sys
 from datetime import datetime
+from types import SimpleNamespace
 
 import matplotlib
 import numpy as np
@@ -32,7 +33,10 @@ from .utils import transfer_images, sobelize, process, compute_losses
 
 # Options ----------------------------------------------------------------------
 
-config = ConfigFile("config.json")
+config_file = ConfigFile("config.json")
+config = config_file.segmentation
+config = config.to_json()
+config = SimpleNamespace(**config)
 
 # Setup ------------------------------------------------------------------------
 
