@@ -82,9 +82,6 @@ class Test(unittest.TestCase):
         names = generate_file_names(BASE_NAME, "txt")
         self.assertEqual(names, RESULT)
 
-        names = generate_file_names(BASE_NAME, ".txt")
-        self.assertEqual(names, RESULT)
-
         INDICES = list(range(1, 4))
         RESULT = ["file_1_1.txt", "file_1_2.txt", "file_1_3.txt"]
         RESULT = [PurePath(r) for r in RESULT]
@@ -95,6 +92,19 @@ class Test(unittest.TestCase):
         RESULT = [FOLDER / r for r in RESULT]
         names = generate_file_names(BASE_NAME, ".txt", indices=INDICES, folder=FOLDER)
         self.assertEqual(names, RESULT)
+
+        RESULT = ["1.txt", "2.txt", "3.txt"]
+        RESULT = [PurePath(r) for r in RESULT]
+        names = generate_file_names(ext=".txt", indices=INDICES)
+        self.assertEqual(names, RESULT)
+
+        FOLDER = PurePath("folder")
+        RESULT = [FOLDER / r for r in RESULT]
+        names = generate_file_names(ext=".txt", indices=INDICES, folder=FOLDER)
+        self.assertEqual(names, RESULT)
+
+        with self.assertRaises(ValueError):
+            names = generate_file_names(ext=".txt")
 
     def test_get_subfolders(self):
         subs = get_subfolders(self.base_path)
@@ -130,6 +140,9 @@ class Test(unittest.TestCase):
         RESULT_S = ["file_1_suffix_1.txt", "file_1_suffix_2.txt", "file_1_suffix_3.txt"]
         RESULT_S = [PurePath(r) for r in RESULT_S]
         RESULT_S = [FOLDER / r for r in RESULT_S]
+        RESULT_I = ["1.txt", "2.txt", "3.txt"]
+        RESULT_I = [PurePath(r) for r in RESULT_I]
+        RESULT_I = [FOLDER / r for r in RESULT_I]
 
         files = Files(FOLDER, BASE_NAME)
         files_idem = (Files(FOLDER, BASE_NAME) / FOLDER).parent
@@ -170,6 +183,10 @@ class Test(unittest.TestCase):
         names_s = files_no_ext_s.generate_file_names(".txt", indices=INDICES)
         self.assertEqual(names_s, RESULT_S)
 
+        files_no_ext_i = Files(FOLDER)
+        names_i = files_no_ext_i.generate_file_names(".txt", indices=INDICES)
+        self.assertEqual(names_i, RESULT_I)
+
         files_ext = Files(FOLDER, BASE_NAME, "wrong")
         names = files_ext.generate_file_names(indices=INDICES)
         for n, r in zip(names, RESULT):
@@ -189,8 +206,17 @@ class Test(unittest.TestCase):
         for n, r in zip(names_s, RESULT):
             self.assertNotEqual(n, r)
 
-        names = files_ext_s.generate_file_names(".txt", indices=INDICES)
-        self.assertEqual(names, RESULT_S)
+        names_s = files_ext_s.generate_file_names(".txt", indices=INDICES)
+        self.assertEqual(names_s, RESULT_S)
+
+        files_ext_i = Files(FOLDER, "wrong")
+        names_i = files_ext_i.generate_file_names(indices=INDICES)
+        for n, r in zip(names_i, RESULT_I):
+            self.assertNotEqual(n, r)
+
+        names_i = files_ext_i.generate_file_names(".txt", indices=INDICES)
+        for n, r in zip(names_i, RESULT_I):
+            self.assertNotEqual(n, r)
 
         files_ext = Files("", BASE_NAME, "txt") / FOLDER
         names = files_ext.generate_file_names(indices=INDICES)
@@ -200,6 +226,12 @@ class Test(unittest.TestCase):
         files_ext_s = files_ext_s + "suffix"
         names_s = files_ext_s.generate_file_names(indices=INDICES)
         self.assertEqual(names_s, RESULT_S)
+
+        files_ext_i = Files("", "txt") / FOLDER
+        files_ext_i = files_ext_i + "suffix"
+        names_i = files_ext_i.generate_file_names(indices=INDICES)
+        for n, r in zip(names_i, RESULT_I):
+            self.assertNotEqual(n, r)
 
         files = Files(FOLDER, BASE_NAME)
         files_copy = files / FOLDER
