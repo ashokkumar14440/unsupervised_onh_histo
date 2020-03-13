@@ -7,8 +7,6 @@ from types import SimpleNamespace
 import numpy as np
 import torch
 
-import os
-
 from inc.config_snake.config import ConfigFile
 
 import src.archs as archs
@@ -53,8 +51,8 @@ config.use_doersch_datasets = False
 config.eval_mode = "hung"
 set_segmentation_input_channels(config)
 
-if not os.path.exists(config.out_dir):
-    os.makedirs(config.out_dir)
+if not Path(config.out_dir).is_dir():
+    Path(config.out_dir).mkdir(parents=True, exist_ok=True)
 
 dict_name = None
 if config.restart:
@@ -62,7 +60,7 @@ if config.restart:
     dict_name = "latest.pytorch"
 
     given_config = config
-    reloaded_config_path = os.path.join(given_config.out_dir, config_name)
+    reloaded_config_path = str(PurePath(given_config.out_dir) / config_name)
     print("Loading restarting config from: %s" % reloaded_config_path)
     with open(reloaded_config_path, "rb") as config_f:
         config = pickle.load(config_f)
@@ -276,36 +274,32 @@ def train():
             }
 
             if e_i % config.save_freq == 0:
-                torch.save(save_dict, os.path.join(config.out_dir, "latest.pytorch"))
+                torch.save(save_dict, str(PurePath(config.out_dir) / "latest.pytorch"))
                 config.last_epoch = e_i  # for last saved version
 
             if is_best:
-                torch.save(save_dict, os.path.join(config.out_dir, "best.pytorch"))
+                torch.save(save_dict, str(PurePath(config.out_dir) / "best.pytorch"))
 
                 with open(
-                    os.path.join(config.out_dir, "best_config.pickle"), "wb"
+                    str(PurePath(config.out_dir) / "best_config.pickle"), "wb"
                 ) as outfile:
                     pickle.dump(config, outfile)
 
                 with open(
-                    os.path.join(config.out_dir, "best_config.txt"), "w"
+                    str(PurePath(config.out_dir / "best_config.txt")), "w"
                 ) as text_file:
                     text_file.write("%s" % config)
-
             net.module.cuda()
 
-        with open(os.path.join(config.out_dir, "config.pickle"), "wb") as outfile:
+        with open(str(PurePath(config.out_dir) / "config.pickle"), "wb") as outfile:
             pickle.dump(config, outfile)
 
-        with open(os.path.join(config.out_dir, "config.txt"), "w") as text_file:
+        with open(str(PurePath(config.out_dir) / "config.txt"), "w") as text_file:
             text_file.write("%s" % config)
 
         if config.test_code:
             exit(0)
 
 
-if __name__ == "__main__":
-    # os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-    train()
-else:
+if name == "__main__":
     train()
