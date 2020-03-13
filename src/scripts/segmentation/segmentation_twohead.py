@@ -54,30 +54,12 @@ set_segmentation_input_channels(config)
 if not Path(config.out_dir).is_dir():
     Path(config.out_dir).mkdir(parents=True, exist_ok=True)
 
-LATEST_CONFIG_PICKLE_FILE = "latest_config.pickle"
-LATEST_CONFIG_TEXT_FILE = "latest_config.txt"
-LATEST_PYTORCH_PICKLE_FILE = "latest_pytorch.pickle"
-BEST_CONFIG_PICKLE_FILE = "best.config.pickle"
-BEST_CONFIG_TEXT_FILE = "best.config.txt"
-BEST_PYTORCH_PICKLE_FILE = "best_pytorch.pickle"
-
-if config.restart:
-    given_config = config
-    reloaded_config_path = str(
-        PurePath(given_config.out_dir) / LATEST_CONFIG_PICKLE_FILE
-    )
-    print("Loading restarting config from: %s" % reloaded_config_path)
-    with open(reloaded_config_path, "rb") as config_f:
-        config = pickle.load(config_f)
-    assert config.model_ind == given_config.model_ind
+state_files = StateFiles(config)
+if state_files.exists_config():
+    config = state_files.load_config("latest")
     config.restart = True
-
-    # copy over new num_epochs and lr schedule
-    config.num_epochs = given_config.num_epochs
-    config.lr_schedule = given_config.lr_schedule
 else:
-    print("Given config: %s" % config_to_str(config))
-
+    config.restart = False
 
 # Model ------------------------------------------------------
 
@@ -91,10 +73,7 @@ def train():
     net = archs.__dict__[config.arch](config)  # type: ignore
     pytorch_data = None
     if config.restart:
-        pytorch_data = torch.load(
-            str(PurePath(config.out_dir / LATEST_PYTORCH_PICKLE_FILE)),
-            map_location=lambda storage, loc: storage,
-        )
+        pytorch_data = state_files.load_pytorch("latest")
         net.load_state_dict(pytorch_data["net"])
     net.cuda()
     net = torch.nn.DataParallel(net)
@@ -264,51 +243,27 @@ def train():
         print("Pre: time %s: \n %s" % (datetime.now(), nice(config.epoch_stats[-1])))
         sys.stdout.flush()
 
-        canvas.draw(config)
-        name = PurePath(config.plot_name)
-        if not name.suffix:
-            name = name.with_suffix(".png")
-        canvas.save(PurePath(config.out_dir) / name)
-
-        if is_best or (e_i % config.save_freq == 0):
+        # SAVE
+        do_save_latest = e_i % config.save_freq == 0
+        if is_best or do_save_latest:
             net.module.cpu()
             save_dict = {
                 "net": net.module.state_dict(),
                 "optimiser": optimiser.state_dict(),
             }
-
-            if e_i % config.save_freq == 0:
-                torch.save(
-                    save_dict,
-                    str(PurePath(config.out_dir) / LATEST_PYTORCH_PICKLE_FILE),
-                )
-                config.last_epoch = e_i  # for last saved version
-
+            config.last_epoch = e_i
+            if do_save_latest == 0:
+                state_files.save_state("latest", config, save_dict)
             if is_best:
-                torch.save(
-                    save_dict, str(PurePath(config.out_dir) / BEST_PYTORCH_PICKLE_FILE)
-                )
-
-                with open(
-                    str(PurePath(config.out_dir) / BEST_CONFIG_PICKLE_FILE), "wb"
-                ) as outfile:
-                    pickle.dump(config, outfile)
-
-                with open(
-                    str(PurePath(config.out_dir / BEST_CONFIG_TEXT_FILE)), "w"
-                ) as text_file:
-                    text_file.write("%s" % config)
+                state_files.save_state("best", config, save_dict)
             net.module.cuda()
 
-        with open(
-            str(PurePath(config.out_dir) / LATEST_CONFIG_PICKLE_FILE), "wb"
-        ) as outfile:
-            pickle.dump(config, outfile)
-
-        with open(
-            str(PurePath(config.out_dir) / LATEST_CONFIG_TEXT_FILE), "w"
-        ) as text_file:
-            text_file.write("%s" % config)
+        # UPDATE CANVAS
+        canvas.draw(config)
+        name = PurePath(config.plot_name)
+        if not name.suffix:
+            name = name.with_suffix(".png")
+        canvas.save(PurePath(config.out_dir) / name)
 
         if config.test_code:
             exit(0)

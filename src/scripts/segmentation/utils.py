@@ -160,3 +160,55 @@ class Canvas:
         self._axarr[index].clear()
         self._axarr[index].plot(config.__dict__[self._FIELDS[index]])
         self._axarr[index].set_title(self._TITLES[index])
+
+
+class StateFiles:
+    _PICKLE = ".pickle"
+    _TXT = ".txt"
+    _PYTORCH = ".pytorch"
+    _CONFIG = "config"
+
+    def __init__(self, config):
+        path = Path(config.out_dir).resolve()
+        if not path.is_dir():
+            raise ValueError("Could not locate output folder.")
+        self._base = Files(path)
+
+    def exists_config(self, suffix):
+        files = self._get_config_files(suffix)
+        name = self._get_file_name(files, self._PICKLE)
+        return Path(name).is_file()
+
+    def save_state(self, suffix, config, pytorch_data):
+        self.save_pytorch(suffix, pytorch_data)
+        self.save_config(suffix, config)
+
+    def save_config(self, suffix, config):
+        files = self._get_config_files(suffix)
+        with open(self._get_file_name(files, self._PICKLE), "wb") as f:
+            pickle.dump(config, f)
+        with open(self._get_file_name(files, self._TXT), "w") as f:
+            f.write(str(config))
+
+    def load_config(self, suffix):
+        files = self._get_config_files(suffix)
+        with open(self._get_file_name(files, self._PICKLE), "rb") as f:
+            config = pickle.load(f)
+        return config
+
+    def save_pytorch(self, suffix, pytorch_data):
+        files = self._get_pytorch_files(suffix)
+        torch.save(pytorch_data, self._get_file_name(files, self._PYTORCH))
+
+    def load_pytorch(self, suffix):
+        files = self._get_pytorch_files(suffix)
+        return torch.load(self._get_file_name(files, self._PYTORCH))
+
+    def _get_file_name(self, files, ext):
+        return files.generate_file_names(ext=ext)[0]
+
+    def _get_config_files(self, suffix):
+        return self._base + self._CONFIG + suffix
+
+    def _get_pytorch_files(self, suffix):
+        return self._base + suffix
