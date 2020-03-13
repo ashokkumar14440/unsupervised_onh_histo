@@ -54,13 +54,18 @@ set_segmentation_input_channels(config)
 if not Path(config.out_dir).is_dir():
     Path(config.out_dir).mkdir(parents=True, exist_ok=True)
 
-dict_name = None
-if config.restart:
-    config_name = "config.pickle"
-    dict_name = "latest.pytorch"
+LATEST_CONFIG_PICKLE_FILE = "latest_config.pickle"
+LATEST_CONFIG_TEXT_FILE = "latest_config.txt"
+LATEST_PYTORCH_PICKLE_FILE = "latest_pytorch.pickle"
+BEST_CONFIG_PICKLE_FILE = "best.config.pickle"
+BEST_CONFIG_TEXT_FILE = "best.config.txt"
+BEST_PYTORCH_PICKLE_FILE = "best_pytorch.pickle"
 
+if config.restart:
     given_config = config
-    reloaded_config_path = str(PurePath(given_config.out_dir) / config_name)
+    reloaded_config_path = str(
+        PurePath(given_config.out_dir) / LATEST_CONFIG_PICKLE_FILE
+    )
     print("Loading restarting config from: %s" % reloaded_config_path)
     with open(reloaded_config_path, "rb") as config_f:
         config = pickle.load(config_f)
@@ -84,22 +89,21 @@ def train():
     dataloaders_head_B = dataloaders_head_A  # unlike for clustering datasets
 
     net = archs.__dict__[config.arch](config)  # type: ignore
-    dict = None
+    pytorch_data = None
     if config.restart:
-        assert dict_name is not None
-        dict = torch.load(
-            str(PurePath(config.out_dir / dict_name)),
+        pytorch_data = torch.load(
+            str(PurePath(config.out_dir / LATEST_PYTORCH_PICKLE_FILE)),
             map_location=lambda storage, loc: storage,
         )
-        net.load_state_dict(dict["net"])
+        net.load_state_dict(pytorch_data["net"])
     net.cuda()
     net = torch.nn.DataParallel(net)
     net.train()
 
     optimiser = get_opt(config.opt)(net.module.parameters(), lr=config.lr)
     if config.restart:
-        assert dict is not None
-        optimiser.load_state_dict(dict["optimiser"])
+        assert pytorch_data is not None
+        optimiser.load_state_dict(pytorch_data["optimiser"])
 
     heads = ["A", "B"]
     if hasattr(config, "head_B_first") and config.head_B_first:
@@ -274,32 +278,41 @@ def train():
             }
 
             if e_i % config.save_freq == 0:
-                torch.save(save_dict, str(PurePath(config.out_dir) / "latest.pytorch"))
+                torch.save(
+                    save_dict,
+                    str(PurePath(config.out_dir) / LATEST_PYTORCH_PICKLE_FILE),
+                )
                 config.last_epoch = e_i  # for last saved version
 
             if is_best:
-                torch.save(save_dict, str(PurePath(config.out_dir) / "best.pytorch"))
+                torch.save(
+                    save_dict, str(PurePath(config.out_dir) / BEST_PYTORCH_PICKLE_FILE)
+                )
 
                 with open(
-                    str(PurePath(config.out_dir) / "best_config.pickle"), "wb"
+                    str(PurePath(config.out_dir) / BEST_CONFIG_PICKLE_FILE), "wb"
                 ) as outfile:
                     pickle.dump(config, outfile)
 
                 with open(
-                    str(PurePath(config.out_dir / "best_config.txt")), "w"
+                    str(PurePath(config.out_dir / BEST_CONFIG_TEXT_FILE)), "w"
                 ) as text_file:
                     text_file.write("%s" % config)
             net.module.cuda()
 
-        with open(str(PurePath(config.out_dir) / "config.pickle"), "wb") as outfile:
+        with open(
+            str(PurePath(config.out_dir) / LATEST_CONFIG_PICKLE_FILE), "wb"
+        ) as outfile:
             pickle.dump(config, outfile)
 
-        with open(str(PurePath(config.out_dir) / "config.txt"), "w") as text_file:
+        with open(
+            str(PurePath(config.out_dir) / LATEST_CONFIG_TEXT_FILE), "w"
+        ) as text_file:
             text_file.write("%s" % config)
 
         if config.test_code:
             exit(0)
 
 
-if name == "__main__":
+if __name__ == "__main__":
     train()
