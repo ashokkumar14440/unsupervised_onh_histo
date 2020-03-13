@@ -124,8 +124,8 @@ def get_dataloader_batch_size(loader_tuple):
 
 
 class Canvas:
-    COUNT = 6
-    TITLES = [
+    _COUNT = 6
+    _TITLES = [
         "Accuracy, Best (Top: {top:.3f})",
         "Accuracy, Average (Top: {top:.3f})",
         "Loss, Head A",
@@ -133,7 +133,7 @@ class Canvas:
         "Loss, Head B",
         "Loss, Head B, No Lamb",
     ]
-    FIELDS = [
+    _FIELDS = [
         "epoch_acc",
         "epoch_avg_subhead_acc",
         "epoch_loss_head_A",
@@ -143,18 +143,20 @@ class Canvas:
     ]
 
     def __init__(self):
-        assert self.COUNT == len(self.TITLES) == len(self.FIELDS)
-        self.fig, self.axarr = plt.subplots(self.COUNT, sharex=False, figsize=(20, 20))
+        assert self._COUNT == len(self._TITLES) == len(self._FIELDS)
+        self._fig, self._axarr = plt.subplots(
+            self._COUNT, sharex=False, figsize=(20, 20)
+        )
 
     def draw(self, config):
-        for index in range(self.COUNT):
+        for index in range(self._COUNT):
             self._draw_plot(config, index)
-        self.fig.canvas.draw_idle()
+        self._fig.canvas.draw_idle()
 
     def save(self, file_path):
-        self.fig.savefig(file_path)
+        self._fig.savefig(file_path)
 
     def _draw_plot(self, config, index):
-        self.axarr[index].clear()
-        self.axarr[index].plot(config.__dict__[self.FIELDS[index]])
-        self.axarr[index].set_title(self.TITLES[index])
+        self._axarr[index].clear()
+        self._axarr[index].plot(config.__dict__[self._FIELDS[index]])
+        self._axarr[index].set_title(self._TITLES[index])
