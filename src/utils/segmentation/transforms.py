@@ -136,12 +136,12 @@ def perform_affine_tf(data, tf_matrices):
   assert (n_i == n_i2)
   assert (r == 2 and c == 3)
 
-    grid = F.affine_grid(
-        tf_matrices, data.shape, align_corners=True  # type: ignore
-    )  # output should be same size
-    data_tf = F.grid_sample(
-        data, grid, padding_mode="zeros", align_corners=True  # type: ignore
-    )  # this can ONLY do bilinear
+  grid = F.affine_grid(
+    tf_matrices, data.shape, align_corners=True  # type: ignore
+  )  # output should be same size
+  data_tf = F.grid_sample(
+    data, grid, padding_mode="zeros", align_corners=True  # type: ignore
+  )  # this can ONLY do bilinear
 
   return data_tf
 
