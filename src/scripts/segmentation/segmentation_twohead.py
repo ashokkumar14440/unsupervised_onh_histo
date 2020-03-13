@@ -1,4 +1,3 @@
-import pickle
 import sys
 from datetime import datetime
 from pathlib import Path, PurePath
@@ -19,7 +18,7 @@ from src.utils.segmentation.IID_losses import (
 from src.utils.segmentation.data import segmentation_create_dataloaders
 from src.utils.segmentation.general import set_segmentation_input_channels
 
-from utils import transfer_images, sobelize, process, compute_losses, Canvas
+from utils import transfer_images, sobelize, process, compute_losses, Canvas, StateFiles
 
 """
   Fully unsupervised clustering for segmentation ("IIC" = "IID").
@@ -35,6 +34,9 @@ config = config.to_json()
 config = SimpleNamespace(**config)
 
 # Setup ------------------------------------------------------------------------
+
+if "last_epoch" not in config.__dict__:
+    config.last_epoch = 0
 
 config.out_dir = str(Path(config.out_root).resolve() / str(config.model_ind))
 config.dataloader_batch_sz = int(config.batch_sz / config.num_dataloaders)
@@ -65,11 +67,14 @@ else:
 
 
 def train():
+    # SETUP
+    # DATALOADERS
     dataloaders_head_A, mapping_assignment_dataloader, mapping_test_dataloader = segmentation_create_dataloaders(
         config
     )
     dataloaders_head_B = dataloaders_head_A  # unlike for clustering datasets
 
+    # ARCHITECTURE
     net = archs.__dict__[config.arch](config)  # type: ignore
     pytorch_data = None
     if config.restart:
@@ -79,22 +84,23 @@ def train():
     net = torch.nn.DataParallel(net)
     net.train()
 
+    # OPTIMIZER
     optimiser = get_opt(config.opt)(net.module.parameters(), lr=config.lr)
     if config.restart:
         assert pytorch_data is not None
         optimiser.load_state_dict(pytorch_data["optimiser"])
 
+    # HEADS
     heads = ["A", "B"]
     if hasattr(config, "head_B_first") and config.head_B_first:
         heads = ["B", "A"]
 
-    # Results
-    # ----------------------------------------------------------------------
-
+    # STATISTICS
     if config.restart:
         next_epoch = config.last_epoch + 1
         print("starting from epoch %d" % next_epoch)
 
+        # TODO these may not be needed if we are always loading precisely the latest epoch
         config.epoch_acc = config.epoch_acc[:next_epoch]  # in case we overshot
         config.epoch_avg_subhead_acc = config.epoch_avg_subhead_acc[:next_epoch]
         config.epoch_stats = config.epoch_stats[:next_epoch]
@@ -131,38 +137,33 @@ def train():
         sys.stdout.flush()
         next_epoch = 1
 
+    # CANVAS
     canvas = Canvas()
 
+    # LOSS
     if not config.use_uncollapsed_loss:
-        print("using condensed loss (default)")
         loss_fn = IID_segmentation_loss
     else:
-        print("using uncollapsed loss!")
         loss_fn = IID_segmentation_loss_uncollapsed
 
-    # Train
-    # ------------------------------------------------------------------------
-
+    # TRAIN
+    # EPOCH LOOP
     for e_i in range(next_epoch, config.num_epochs):
         print("Starting e_i: %d %s" % (e_i, datetime.now()))
         sys.stdout.flush()
 
-        print("Checking lr_schedule")
         if e_i in config.lr_schedule:
-            print("  is in schedule!")
             optimiser = update_lr(optimiser, lr_mult=config.lr_mult)
 
-        print("Head loop")
+        # HEAD LOOP
         for head_i in range(2):
             head = heads[head_i]
             if head == "A":
-                print("  Head A")
                 dataloaders = dataloaders_head_A
                 epoch_loss = config.epoch_loss_head_A
                 epoch_loss_no_lamb = config.epoch_loss_no_lamb_head_A
                 lamb = config.lamb_A
             elif head == "B":
-                print("  Head B")
                 dataloaders = dataloaders_head_B
                 epoch_loss = config.epoch_loss_head_B
                 epoch_loss_no_lamb = config.epoch_loss_no_lamb_head_B
@@ -176,7 +177,7 @@ def train():
             avg_loss_no_lamb = 0.0
             avg_loss_count = 0
 
-            # PROCESS EXAMPLES
+            # BATCH LOOP
             for loaders in zip(*iterators):
                 net.module.zero_grad()
                 images = transfer_images(loaders, config)
@@ -202,6 +203,7 @@ def train():
                     )
                     sys.stdout.flush()
 
+                # TODO This could possible be more graceful...
                 if not np.isfinite(losses[0].item()):
                     print("Loss is not finite... %s:" % str(losses[0]))
                     exit(1)
@@ -218,6 +220,7 @@ def train():
                 del loaders
 
                 b_i += 1
+                # HACK DEBUGGING
                 if b_i == 2 and config.test_code:
                     break
 
@@ -228,9 +231,7 @@ def train():
             epoch_loss.append(avg_loss)
             epoch_loss_no_lamb.append(avg_loss_no_lamb)
 
-        # Eval
-        # -----------------------------------------------------------------------
-
+        # EVALUATE
         is_best = segmentation_eval(
             config,
             net,
@@ -265,6 +266,7 @@ def train():
             name = name.with_suffix(".png")
         canvas.save(PurePath(config.out_dir) / name)
 
+        # HACK DEBUGGING
         if config.test_code:
             exit(0)
 
