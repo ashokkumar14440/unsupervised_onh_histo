@@ -34,6 +34,7 @@ def transfer_images(loader_tuple, config):
         images[IMAGE_2] = images[IMAGE_2][:total_size, :, :, :]
         images[AFFINE] = images[AFFINE][:total_size, :, :]
         images[MASK] = images[MASK][:total_size, :, :]
+    return images
 
 
 def sobelize(images, config):
@@ -43,6 +44,7 @@ def sobelize(images, config):
     images[IMAGE_2] = sobel_process(
         images[IMAGE_2], config.include_rgb, using_IR=config.using_IR
     )
+    return images
 
 
 def process(images, net, head):
