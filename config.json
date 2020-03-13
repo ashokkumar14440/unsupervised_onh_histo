@@ -53,6 +53,7 @@
     "aff_max_scale": 1.2,
     "half_T_side_dense": 10,
     "half_T_side_sparse_min": 0,
-    "half_T_side_sparse_max": 0
+    "half_T_side_sparse_max": 0,
+    "plot_name": "plots.png"
   }
 }
