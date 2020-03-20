@@ -9,17 +9,15 @@ from src.utils.cluster.transforms import sobel_process
 
 def segmentation_eval(
     config,
+    epoch_stats,
     net,
     mapping_assignment_dataloader,
     mapping_test_dataloader,
     sobel,
     using_IR=False,
     verbose=0,
-    return_only=False,
 ):
-    torch.cuda.empty_cache()
     net.eval()
-
     stats_dict = cluster_subheads_eval(
         config,
         net,
@@ -30,22 +28,13 @@ def segmentation_eval(
         get_data_fn=_segmentation_get_data,
         verbose=verbose,
     )
-
     net.train()
-
-    acc = stats_dict["best"]
-    is_best = (len(config.epoch_acc) > 0) and (acc > max(config.epoch_acc))
-
-    torch.cuda.empty_cache()
-
-    if not return_only:
-        config.epoch_stats.append(stats_dict)
-        config.epoch_acc.append(acc)
-        config.epoch_avg_subhead_acc.append(stats_dict["avg"])
-
-        return is_best
+    if "acc" in epoch_stats:
+        is_best = stats_dict["best"] > max(epoch_stats["acc"])
     else:
-        return stats_dict
+        is_best = True
+    stats_dict["is_best"] = is_best
+    return stats_dict
 
 
 def _segmentation_get_data(

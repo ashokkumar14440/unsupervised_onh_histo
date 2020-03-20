@@ -202,8 +202,14 @@ class EpochStatistics:
         else:
             return len(self._data)
 
+    def __contains__(self, key):
+        if self._data is None:
+            return False
+        else:
+            return key in self._data.columns
+
     def __getitem__(self, key):
-        return self._data.loc[:, key]
+        return list(self._data.loc[:, key])
 
     def add(self, values: dict, batch_statistics: Dict[str, BatchStatistics]):
         all_means = {}
@@ -229,9 +235,6 @@ class EpochStatistics:
         instance = cls()
         instance.load(path_or_file_obj)
         return instance
-
-    def print(self):
-        pass
 
 
 def save_text(text, f):

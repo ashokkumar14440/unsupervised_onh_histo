@@ -113,25 +113,10 @@ def train(config):
     if config.restart:
         next_epoch = config.last_epoch + 1
         epoch_stats = state_files.load("statistics", "latest")
-        print("starting from epoch %d" % next_epoch)
     else:
         next_epoch = 1
         epoch_stats = EpochStatistics()
-
-        config.epoch_acc = []
-        config.epoch_avg_subhead_acc = []
-        config.epoch_stats = []
-
-        _ = segmentation_eval(
-            config,
-            net,
-            mapping_assignment_dataloader=mapping_assignment_dataloader,
-            mapping_test_dataloader=mapping_test_dataloader,
-            sobel=(not config.no_sobel),
-            using_IR=config.using_IR,
-        )
-        print("Pre: time %s: \n %s" % (datetime.now(), nice(config.epoch_stats[-1])))
-        sys.stdout.flush()
+    print("Starting from epoch {epoch:d}".format(epoch=next_epoch))
 
     # CANVAS
     canvas = Canvas()
@@ -212,8 +197,9 @@ def train(config):
                 del loaders
 
         # EVALUATE
-        is_best = segmentation_eval(
+        eval_stats = segmentation_eval(
             config,
+            epoch_stats,
             net,
             mapping_assignment_dataloader=mapping_assignment_dataloader,
             mapping_test_dataloader=mapping_test_dataloader,
@@ -224,16 +210,12 @@ def train(config):
         epoch_stats.add(
             {
                 "epoch": e_i,
-                "is_best": is_best,
-                "acc": config.epoch_acc[-1],
-                "avg_subhead_acc": config.epoch_avg_subhead_acc[-1],
-                **(config.epoch_stats[-1]),
+                "is_best": eval_stats["is_best"],
+                "acc": eval_stats["best"],
+                "avg_subhead_acc": eval_stats["avg"],
             },
             batch_stats,
         )
-
-        print("Pre: time %s: \n %s" % (datetime.now(), nice(config.epoch_stats[-1])))
-        sys.stdout.flush()
 
         # SAVE
         net.module.cpu()
@@ -243,7 +225,7 @@ def train(config):
         }
         config.last_epoch = e_i
         state_files.save_state("latest", config, save_dict, epoch_stats)
-        if is_best:
+        if eval_stats["is_best"]:
             state_files.save_state("best", config, save_dict, epoch_stats)
         net.module.cuda()
 
