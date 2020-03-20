@@ -165,27 +165,6 @@ class Canvas:
         self._axarr[index].set_title(self._TITLES[index])
 
 
-class Model:
-    def __init__(self, state_files):
-        pass
-
-    @property
-    def finished(self):
-        pass
-
-    def process_epoch(self):
-        pass
-
-    def _process_head(self):
-        pass
-
-    def _process_batch(self):
-        pass
-
-    def _print_status(self):
-        pass
-
-
 class BatchStatistics:
     # TODO replaces b_i, avg_loss, avg_loss_no_lamb, avg_loss_count
     def __init__(self, loss_names: Sequence[str]):
