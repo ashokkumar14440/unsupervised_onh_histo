@@ -53,8 +53,9 @@ config.use_doersch_datasets = False
 config.eval_mode = "hung"
 set_segmentation_input_channels(config)
 
-if not Path(config.out_dir).is_dir():
-    Path(config.out_dir).mkdir(parents=True, exist_ok=True)
+    out_dir = Path(config.out_dir).resolve()
+    if not (out_dir.is_dir() and out_dir.exists()):
+        out_dir.mkdir(parents=True, exist_ok=True)
 
 state_files = StateFiles(config)
 if state_files.exists_config("latest"):
@@ -272,4 +273,6 @@ def train():
 
 
 if __name__ == "__main__":
+    out = PurePath("out/555")
+    shutil.rmtree(out, ignore_errors=True)
     train()

@@ -206,7 +206,7 @@ class StateFiles:
 
     def __init__(self, config):
         path = Path(config.out_dir).resolve()
-        if not path.is_dir():
+        if not (path.is_dir() and path.exists()):
             raise ValueError("Could not locate output folder.")
         self._base = Files(path)
 
@@ -234,11 +234,14 @@ class StateFiles:
 
     def save_pytorch(self, suffix, pytorch_data):
         files = self._get_pytorch_files(suffix)
-        torch.save(pytorch_data, self._get_file_name(files, self._PYTORCH))
+        with open(self._get_file_name(files, self._PYTORCH), "wb") as f:
+            torch.save(pytorch_data, f)
 
     def load_pytorch(self, suffix):
         files = self._get_pytorch_files(suffix)
-        return torch.load(self._get_file_name(files, self._PYTORCH))
+        with open(self._get_file_name(files, self._PYTORCH), "rb") as f:
+            data = torch.load(f)
+        return data
 
     def _get_file_name(self, files, ext):
         return files.generate_file_names(ext=ext)[0]
