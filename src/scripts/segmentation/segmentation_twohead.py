@@ -57,7 +57,7 @@ if not Path(config.out_dir).is_dir():
     Path(config.out_dir).mkdir(parents=True, exist_ok=True)
 
 state_files = StateFiles(config)
-if state_files.exists_config():
+if state_files.exists_config("latest"):
     config = state_files.load_config("latest")
     config.restart = True
 else:

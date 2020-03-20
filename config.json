@@ -26,7 +26,6 @@
     "num_dataloaders": 1,
     "num_sub_heads": 1,
     "out_root": "./out",
-    "restart": false,
     "save_freq": 5,
     "test_code": false,
     "head_B_first": false,
