@@ -139,12 +139,12 @@ class Canvas:
         "Loss, Head B, No Lamb",
     ]
     _FIELDS = [
-        "epoch_acc",
-        "epoch_avg_subhead_acc",
-        "epoch_loss_A",
-        "epoch_loss_no_lamb_A",
-        "epoch_loss_B",
-        "epoch_loss_no_lamb_B",
+        "acc",
+        "avg_subhead_acc",
+        "loss_A",
+        "loss_no_lamb_A",
+        "loss_B",
+        "loss_no_lamb_B",
     ]
 
     def __init__(self):
@@ -190,6 +190,8 @@ class BatchStatistics:
 
 
 class EpochStatistics:
+    _DELIMITER = "|"
+
     def __init__(self):
         self._data = None
 
@@ -215,15 +217,62 @@ class EpochStatistics:
         assert set(names) == set(self._data.columns)
         self._data.loc[self.count] = {**values, **all_means}
 
+    def save(self, path_or_file_obj):
+        assert self._data is not None
+        self._data.to_csv(path_or_file_obj, index=False, sep=self._DELIMITER)
+
+    def load(self, path_or_file_obj):
+        self._data = pd.read_csv(path_or_file_obj, sep=self._DELIMITER)
+
+    @classmethod
+    def from_file(cls, path_or_file_obj):
+        instance = cls()
+        instance.load(path_or_file_obj)
+        return instance
+
     def print(self):
         pass
 
 
+def save_text(text, f):
+    f.write(str(text))
+
+
+def save_stats(stats: EpochStatistics, f):
+    stats.save(f)
+
+
 class StateFiles:
-    _PICKLE = ".pickle"
-    _TXT = ".txt"
-    _PYTORCH = ".pytorch"
-    _CONFIG = "config"
+    _SAVE_STRATEGIES = {
+        "pytorch": {
+            "ext": ".pytorch",
+            "infix": "",
+            "binary_mode": "b",
+            "load_fn": torch.load,
+            "save_fn": torch.save,
+        },
+        "config_binary": {
+            "ext": ".pickle",
+            "infix": "config",
+            "binary_mode": "b",
+            "load_fn": pickle.load,
+            "save_fn": pickle.dump,
+        },
+        "config_readable": {
+            "ext": ".txt",
+            "infix": "config",
+            "binary_mode": "",
+            "load_fn": None,
+            "save_fn": save_text,
+        },
+        "statistics": {
+            "ext": ".csv",
+            "infix": "",
+            "binary_mode": "",
+            "load_fn": EpochStatistics.from_file,
+            "save_fn": save_stats,
+        },
+    }
 
     def __init__(self, config):
         path = Path(config.out_dir).resolve()
@@ -231,44 +280,32 @@ class StateFiles:
             raise ValueError("Could not locate output folder.")
         self._base = Files(path)
 
-    def exists_config(self, suffix):
-        files = self._get_config_files(suffix)
-        name = self._get_file_name(files, self._PICKLE)
-        return Path(name).is_file()
+    def exists(self, state_file, suffix):
+        name = self._get_file_name(state_file, suffix)
+        return Path(name).is_file() and Path(name).exists()
 
-    def save_state(self, suffix, config, pytorch_data):
-        self.save_pytorch(suffix, pytorch_data)
-        self.save_config(suffix, config)
-
-    def save_config(self, suffix, config):
-        files = self._get_config_files(suffix)
-        with open(self._get_file_name(files, self._PICKLE), "wb") as f:
-            pickle.dump(config, f)
-        with open(self._get_file_name(files, self._TXT), "w") as f:
-            f.write(str(config))
-
-    def load_config(self, suffix):
-        files = self._get_config_files(suffix)
-        with open(self._get_file_name(files, self._PICKLE), "rb") as f:
-            config = pickle.load(f)
-        return config
-
-    def save_pytorch(self, suffix, pytorch_data):
-        files = self._get_pytorch_files(suffix)
-        with open(self._get_file_name(files, self._PYTORCH), "wb") as f:
-            torch.save(pytorch_data, f)
-
-    def load_pytorch(self, suffix):
-        files = self._get_pytorch_files(suffix)
-        with open(self._get_file_name(files, self._PYTORCH), "rb") as f:
-            data = torch.load(f)
+    def load(self, state_file, suffix):
+        with self._prepare_context(state_file, suffix, "r") as f:
+            data = self._SAVE_STRATEGIES[state_file]["load_fn"](f)
         return data
 
-    def _get_file_name(self, files, ext):
+    def save(self, state_file, suffix, data):
+        with self._prepare_context(state_file, suffix, "w") as f:
+            self._SAVE_STRATEGIES[state_file]["save_fn"](data, f)
+
+    def save_state(self, suffix, config, pytorch_data, stats):
+        self.save("pytorch", suffix, pytorch_data)
+        self.save("config_binary", suffix, config)
+        self.save("config_readable", suffix, config)
+        self.save("statistics", suffix, stats)
+
+    def _prepare_context(self, state_file, suffix, mode):
+        binary_mode = self._SAVE_STRATEGIES[state_file]["binary_mode"]
+        return open(self._get_file_name(state_file, suffix), mode + binary_mode)
+
+    def _get_file_name(self, state_file: str, suffix: str):
+        s = self._SAVE_STRATEGIES[state_file]
+        infix = s["infix"]
+        files = self._base + infix + suffix
+        ext = s["ext"]
         return files.generate_file_names(ext=ext)[0]
-
-    def _get_config_files(self, suffix):
-        return self._base + self._CONFIG + suffix
-
-    def _get_pytorch_files(self, suffix):
-        return self._base + suffix

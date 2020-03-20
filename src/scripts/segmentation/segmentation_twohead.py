@@ -69,8 +69,8 @@ def train(config):
     # SETUP
     # ! class MODEL
     state_files = StateFiles(config)
-    if state_files.exists_config("latest"):
-        config = state_files.load_config("latest")
+    if state_files.exists("config_binary", "latest"):
+        config = state_files.load("config_binary", "latest")
         config.restart = True
     else:
         config.restart = False
@@ -87,7 +87,7 @@ def train(config):
     net = archs.__dict__[config.arch](config)  # type: ignore
     pytorch_data = None
     if config.restart:
-        pytorch_data = state_files.load_pytorch("latest")
+        pytorch_data = state_files.load("pytorch", "latest")
         net.load_state_dict(pytorch_data["net"])
     net.cuda()
     net = torch.nn.DataParallel(net)
@@ -110,8 +110,12 @@ def train(config):
     # STATISTICS
     if config.restart:
         next_epoch = config.last_epoch + 1
+        epoch_stats = state_files.load("statistics", "latest")
         print("starting from epoch %d" % next_epoch)
     else:
+        next_epoch = 1
+        epoch_stats = EpochStatistics()
+
         config.epoch_acc = []
         config.epoch_avg_subhead_acc = []
         config.epoch_stats = []
@@ -124,10 +128,8 @@ def train(config):
             sobel=(not config.no_sobel),
             using_IR=config.using_IR,
         )
-
         print("Pre: time %s: \n %s" % (datetime.now(), nice(config.epoch_stats[-1])))
         sys.stdout.flush()
-        next_epoch = 1
 
     # CANVAS
     canvas = Canvas()
@@ -140,7 +142,6 @@ def train(config):
 
     # TRAIN
     # EPOCH LOOP
-    epoch_stats = EpochStatistics()
     for e_i in range(next_epoch, config.num_epochs + 1):
         print("Starting e_i: %d %s" % (e_i, datetime.now()))
         sys.stdout.flush()
@@ -197,10 +198,7 @@ def train(config):
 
                 b_i += 1
                 batch_stats[head].add(
-                    {
-                        "epoch_loss": losses[0].item(),
-                        "epoch_loss_no_lamb": losses[1].item(),
-                    }
+                    {"loss": losses[0].item(), "loss_no_lamb": losses[1].item()}
                 )
 
                 # TORCH
@@ -210,15 +208,6 @@ def train(config):
                 # ! explicit del required if not in function scope
                 del images
                 del loaders
-
-        epoch_stats.add(
-            {
-                "epoch_acc": config.epoch_acc[-1],
-                "epoch_avg_subhead_acc": config.epoch_avg_subhead_acc[-1],
-                "epoch_stats": config.epoch_stats[-1],
-            },
-            batch_stats,
-        )
 
         # EVALUATE
         is_best = segmentation_eval(
@@ -230,23 +219,31 @@ def train(config):
             using_IR=config.using_IR,
         )
 
+        epoch_stats.add(
+            {
+                "epoch": e_i,
+                "is_best": is_best,
+                "acc": config.epoch_acc[-1],
+                "avg_subhead_acc": config.epoch_avg_subhead_acc[-1],
+                **(config.epoch_stats[-1]),
+            },
+            batch_stats,
+        )
+
         print("Pre: time %s: \n %s" % (datetime.now(), nice(config.epoch_stats[-1])))
         sys.stdout.flush()
 
         # SAVE
-        do_save_latest = e_i % config.save_freq == 0
-        if is_best or do_save_latest:
-            net.module.cpu()
-            save_dict = {
-                "net": net.module.state_dict(),
-                "optimizer": optimizer.state_dict(),
-            }
-            config.last_epoch = e_i
-            if do_save_latest == 0:
-                state_files.save_state("latest", config, save_dict)
-            if is_best:
-                state_files.save_state("best", config, save_dict)
-            net.module.cuda()
+        net.module.cpu()
+        save_dict = {
+            "net": net.module.state_dict(),
+            "optimizer": optimizer.state_dict(),
+        }
+        config.last_epoch = e_i
+        state_files.save_state("latest", config, save_dict, epoch_stats)
+        if is_best:
+            state_files.save_state("best", config, save_dict, epoch_stats)
+        net.module.cuda()
 
         # UPDATE CANVAS
         canvas.draw(epoch_stats)
