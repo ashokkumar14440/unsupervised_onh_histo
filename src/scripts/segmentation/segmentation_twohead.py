@@ -69,11 +69,13 @@ def train(config):
     # SETUP
     # ! class MODEL
     state_files = StateFiles(config)
+    num_epochs = config.num_epochs
     if state_files.exists("config_binary", "latest"):
         config = state_files.load("config_binary", "latest")
         config.restart = True
     else:
         config.restart = False
+    config.num_epochs = num_epochs
 
     # DATALOADERS
     # TODO rework dataloader into general concept using map-based torch.utils.data.Dataloader
