@@ -1,10 +1,12 @@
 import pickle
+from typing import Dict
 
 import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import torch
+from torch.utils.data import DataLoader
 import pandas as pd
 
 from inc.python_file_utilities.file_utils import *
@@ -139,10 +141,10 @@ class Canvas:
     _FIELDS = [
         "epoch_acc",
         "epoch_avg_subhead_acc",
-        "epoch_loss_head_A",
-        "epoch_loss_no_lamb_head_A",
-        "epoch_loss_head_B",
-        "epoch_loss_no_lamb_head_B",
+        "epoch_loss_A",
+        "epoch_loss_no_lamb_A",
+        "epoch_loss_B",
+        "epoch_loss_no_lamb_B",
     ]
 
     def __init__(self):
@@ -151,48 +153,67 @@ class Canvas:
             self._COUNT, sharex=False, figsize=(20, 20)
         )
 
-    def draw(self, config):
+    def draw(self, epoch_statistics: "EpochStatistics"):
         for index in range(self._COUNT):
-            self._draw_plot(config, index)
+            self._draw_plot(epoch_statistics, index)
         self._fig.canvas.draw_idle()
 
     def save(self, file_path):
         self._fig.savefig(file_path)
 
-    def _draw_plot(self, config, index):
+    def _draw_plot(self, epoch_statistics, index):
         self._axarr[index].clear()
-        self._axarr[index].plot(config.__dict__[self._FIELDS[index]])
+        self._axarr[index].plot(epoch_statistics[self._FIELDS[index]])
         self._axarr[index].set_title(self._TITLES[index])
 
 
 class BatchStatistics:
-    # TODO replaces b_i, avg_loss, avg_loss_no_lamb, avg_loss_count
-    def __init__(self, loss_names: Sequence[str]):
-        self._data = pd.DataFrame(columns=loss_names)
+    def __init__(self):
+        self._data = None
 
     @property
     def count(self):
-        return len(self._data)
+        if self._data is None:
+            return 0
+        else:
+            return len(self._data)
 
-    def add(self, loss_values: dict):
-        assert set(loss_values.keys()) == set(self._data.columns)
-        self._data.loc[self.count] = loss_values
+    def add(self, values: dict):
+        names = list(values.keys())
+        if self._data is None:
+            self._data = pd.DataFrame(columns=names)
+        assert set(names) == set(self._data.columns)
+        self._data.loc[self.count] = values
 
     def get_means(self):
         return dict(self._data.mean())
 
 
 class EpochStatistics:
-    # TODO replaces epoch_acc, epoch_avg_subhead_acc, epoch_stats
-    # TODO epoch_loss_head_A, epoch_loss_no_lamb_head_A
-    # TODO epoch_loss_head_B, epoch_loss_no_lamb_head_B
-    # TODO all above are config.*
-    # TODO epoch_loss, epoch_loss_no_lamb
     def __init__(self):
-        pass
+        self._data = None
 
-    def add(self, batch_values):
-        pass
+    @property
+    def count(self):
+        if self._data is None:
+            return 0
+        else:
+            return len(self._data)
+
+    def __getitem__(self, key):
+        return self._data.loc[:, key]
+
+    def add(self, values: dict, batch_statistics: Dict[str, BatchStatistics]):
+        all_means = {}
+        for head, stats in batch_statistics.items():
+            means = stats.get_means()
+            names = {old: "_".join([old, head]) for old in means.keys()}
+            all_means.update({new: means[old] for old, new in names.items()})
+        names = [*values.keys(), *all_means.keys()]
+        if self._data is None:
+            self._data = pd.DataFrame(columns=names)
+        assert set(names) == set(self._data.columns)
+        self._data.loc[self.count] = {**values, **all_means}
 
     def print(self):
         pass
