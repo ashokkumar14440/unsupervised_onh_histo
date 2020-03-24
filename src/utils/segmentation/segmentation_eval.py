@@ -9,7 +9,6 @@ from src.utils.cluster.transforms import sobel_process
 
 def segmentation_eval(
     config,
-    epoch_stats,
     net,
     mapping_assignment_dataloader,
     mapping_test_dataloader,
@@ -29,11 +28,6 @@ def segmentation_eval(
         verbose=verbose,
     )
     net.train()
-    if "acc" in epoch_stats:
-        is_best = stats_dict["best"] > max(epoch_stats["acc"])
-    else:
-        is_best = True
-    stats_dict["is_best"] = is_best
     return stats_dict
 
 
@@ -74,6 +68,7 @@ def _segmentation_get_data(
 
     for b_i, batch in enumerate(dataloader):
 
+        # TODO mask should be of type bool, fix in dataloaders
         imgs, flat_targets, mask = batch
         imgs = imgs.cuda()
 
