@@ -4,9 +4,7 @@ from datetime import datetime
 import torch
 from torch.utils.data import ConcatDataset
 
-from src.datasets.segmentation import DoerschDataset
-from src.datasets.segmentation import cocostuff
-from src.datasets.segmentation import potsdam
+from src.scripts.segmentation import data
 
 
 def segmentation_create_dataloaders(config):
@@ -50,10 +48,6 @@ def segmentation_create_dataloaders(config):
         dataloaders, mapping_assignment_dataloader, mapping_test_dataloader = make_Coco_dataloaders(
             config
         )
-    elif config.dataset == "Potsdam":
-        dataloaders, mapping_assignment_dataloader, mapping_test_dataloader = make_Potsdam_dataloaders(
-            config
-        )
     else:
         raise NotImplementedError
 
@@ -62,38 +56,18 @@ def segmentation_create_dataloaders(config):
 
 def make_Coco_dataloaders(config):
     dataloaders = _create_dataloaders(
-        config, cocostuff.__dict__[config.dataset]
+        config, data.__dict__[config.dataset]
     )  # type: ignore
 
     mapping_assignment_dataloader = _create_mapping_loader(
         config,
-        cocostuff.__dict__[config.dataset],  # type: ignore
+        data.__dict__[config.dataset],  # type: ignore
         partitions=config.mapping_assignment_partitions,
     )
 
     mapping_test_dataloader = _create_mapping_loader(
         config,
-        cocostuff.__dict__[config.dataset],  # type: ignore
-        partitions=config.mapping_test_partitions,
-    )
-
-    return dataloaders, mapping_assignment_dataloader, mapping_test_dataloader
-
-
-def make_Potsdam_dataloaders(config):
-    dataloaders = _create_dataloaders(
-        config, potsdam.__dict__[config.dataset]
-    )  # type: ignore
-
-    mapping_assignment_dataloader = _create_mapping_loader(
-        config,
-        potsdam.__dict__[config.dataset],  # type: ignore
-        partitions=config.mapping_assignment_partitions,
-    )
-
-    mapping_test_dataloader = _create_mapping_loader(
-        config,
-        potsdam.__dict__[config.dataset],  # type: ignore
+        data.__dict__[config.dataset],  # type: ignore
         partitions=config.mapping_test_partitions,
     )
 
@@ -123,8 +97,6 @@ def _create_dataloaders(config, dataset_class):
                     "purpose": "train",
                 }  # return training tuples, not including labels
             )
-            if config.use_doersch_datasets:
-                train_imgs_curr = DoerschDataset(config, train_imgs_curr)
 
             train_imgs_list.append(train_imgs_curr)
 
@@ -161,8 +133,6 @@ def _create_mapping_loader(config, dataset_class, partitions):
                 "purpose": "test",
             }  # return testing tuples, image and label
         )
-        if config.use_doersch_datasets:
-            imgs_curr = DoerschDataset(config, imgs_curr)
         imgs_list.append(imgs_curr)
 
     imgs = ConcatDataset(imgs_list)
