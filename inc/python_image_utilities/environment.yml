@@ -1,0 +1,11 @@
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - noise
+  - numpy
+  - pillow
+  - python
+  - pip
+  - pip:
+      - opencv-python
