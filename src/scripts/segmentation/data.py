@@ -4,6 +4,7 @@
 
 
 import os.path as osp
+from pathlib import Path
 import pickle
 from glob import glob
 
@@ -33,7 +34,7 @@ __all__ = [
     "Coco164kCuratedFull",
 ]
 
-RENDER_DATA = False
+RENDER_DATA = True
 
 
 class _Coco(data.Dataset):
@@ -56,6 +57,8 @@ class _Coco(data.Dataset):
         self.purpose = purpose
 
         self.root = config.dataset_root
+        self._render_folder = config.render_root
+        Path(self._render_folder).mkdir(parents=True, exist_ok=True)
 
         self.single_mode = hasattr(config, "single_mode") and config.single_mode
 
@@ -112,326 +115,212 @@ class _Coco(data.Dataset):
         cv2.setNumThreads(0)
 
     def _prepare_train(self, index, img, label):
-        # This returns gpu tensors.
-        # label is passed in canonical [0 ... 181] indexing
-
         assert img.shape[:2] == label.shape
-        img = img.astype(np.float32)
-        label = label.astype(np.int32)
 
-        # shrink original images, for memory purposes, otherwise no point
-        if self.pre_scale_all:
-            assert self.pre_scale_factor < 1.0
-            img = cv2.resize(
-                img,
-                dsize=None,
-                fx=self.pre_scale_factor,
-                fy=self.pre_scale_factor,
-                interpolation=cv2.INTER_LINEAR,
-            )
-            label = cv2.resize(
-                label,
-                dsize=None,
-                fx=self.pre_scale_factor,
-                fy=self.pre_scale_factor,
-                interpolation=cv2.INTER_NEAREST,
-            )
+        # PREPARE IMAGE AND LABEL
+        img = self._preprocess_general_train(img, np.float32, cv2.INTER_LINEAR)
+        label = self._preprocess_general_train(label, np.int32, cv2.INTER_NEAREST)
+        img, label = self._pad_and_crop(img, label, ("random", "fixed"))
 
-        # basic augmentation transforms for both img1 and img2
-        if self.use_random_scale:
-            # bilinear interp requires float img
-            scale_factor = (
-                np.random.rand() * (self.scale_max - self.scale_min)
-            ) + self.scale_min
-            img = cv2.resize(
-                img,
-                dsize=None,
-                fx=scale_factor,
-                fy=scale_factor,
-                interpolation=cv2.INTER_LINEAR,
-            )
-            label = cv2.resize(
-                label,
-                dsize=None,
-                fx=scale_factor,
-                fy=scale_factor,
-                interpolation=cv2.INTER_NEAREST,
-            )
+        # CREATE TRANSFORMED IMAGE AND PREPROCESS
+        t_img = np.copy(img)
+        t_img, affine_t_to_norm = self._preprocess_transformed(t_img)
 
-        # random crop to input sz
-        img, coords = pad_and_or_crop(img, self.input_sz, mode="random")
-        label, _ = pad_and_or_crop(label, self.input_sz, mode="fixed", coords=coords)
+        # PREPROCESS ORIGINAL IMAGE
+        img = self._preprocess_train(img)
 
-        _, mask_img1 = self._filter_label(label)
-        # uint8 tensor as masks should be binary, also for consistency with
-        # prepare_train, but converted to float32 in main loop because is used
-        # multiplicatively in loss
-        mask_img1 = torch.from_numpy(mask_img1.astype(np.uint8)).cuda()
+        # CREATE AND USE MASK
+        _, mask = self._generate_mask(label)
+        img = self._apply_mask(img, mask)
+        t_img = self._apply_mask(t_img, mask)
 
-        # make img2 different from img1 (img)
-
-        # tf_mat can be:
-        # *A, from img2 to img1 (will be applied to img2's heatmap)-> img1 space
-        #   input img1 tf: *tf.functional or pil.image
-        #   input mask tf: *none
-        #   output heatmap: *tf.functional (parallel), inverse of what is used
-        #     for inputs, create inverse of this tf in [-1, 1] format
-
-        # B, from img1 to img2 (will be applied to img1's heatmap)-> img2 space
-        #   input img1 tf: pil.image
-        #   input mask tf: pil.image (discrete)
-        #   output heatmap: tf.functional, create copy of this tf in [-1,1] format
-
-        # tf.function tf_mat: translation is opposite to what we'd expect (+ve 1
-        # is shift half towards left)
-        # but rotation is correct (-sin in top right = counter clockwise)
-
-        # flip is [[-1, 0, 0], [0, 1, 0], [0, 0, 1]]
-        # img2 = flip(affine1_to_2(img1))
-        # => img1_space = affine1_to_2^-1(flip^-1(img2_space))
-        #               = affine2_to_1(flip^-1(img2_space))
-        # so tf_mat_img2_to_1 = affine2_to_1 * flip^-1 (order matters as not diag)
-        # flip^-1 = flip
-
-        # no need to tf label, as we're doing option A, mask needed in img1 space
-
-        # converting to PIL does not change underlying np datatype it seems
-        img1 = Image.fromarray(img.astype(np.uint8))
-
-        # (img2) do jitter, no tf_mat change
-        img2 = self.jitter_tf(img1)  # not in place, new memory
-        img1 = np.array(img1)
-        img2 = np.array(img2)
-
-        # channels still last
-        if not self.no_sobel:
-            img1 = custom_greyscale_numpy(img1, include_rgb=self.include_rgb)
-            img2 = custom_greyscale_numpy(img2, include_rgb=self.include_rgb)
-
-        img1 = img1.astype(np.float32) / 255.0
-        img2 = img2.astype(np.float32) / 255.0
-
-        # convert both to channel-first tensor format
-        # make them all cuda tensors now, except label, for optimality
-        img1 = torch.from_numpy(img1).permute(2, 0, 1).cuda()
-        img2 = torch.from_numpy(img2).permute(2, 0, 1).cuda()
-
-        # mask if required
-        if self.mask_input:
-            masked = 1 - mask_img1
-            img1[:, masked] = 0
-            img2[:, masked] = 0
-
-        # (img2) do affine if nec, tf_mat changes
-        if self.use_random_affine:
-            affine_kwargs = {
-                "min_rot": self.aff_min_rot,
-                "max_rot": self.aff_max_rot,
-                "min_shear": self.aff_min_shear,
-                "max_shear": self.aff_max_shear,
-                "min_scale": self.aff_min_scale,
-                "max_scale": self.aff_max_scale,
-            }
-            img2, affine1_to_2, affine2_to_1 = random_affine(img2, **affine_kwargs)  #
-            # tensors
-        else:
-            affine2_to_1 = torch.zeros([2, 3]).to(torch.float32).cuda()  # identity
-            affine2_to_1[0, 0] = 1
-            affine2_to_1[1, 1] = 1
-
-        # (img2) do random flip, tf_mat changes
-        if np.random.rand() > self.flip_p:
-            img2 = torch.flip(img2, dims=[2])  # horizontal, along width
-
-            # applied affine, then flip, new = flip * affine * coord
-            # (flip * affine)^-1 is just flip^-1 * affine^-1.
-            # No order swap, unlike functions...
-            # hence top row is negated
-            affine2_to_1[0, :] *= -1.0
-
+        # RENDER
         if RENDER_DATA:
-            render(img1, mode="image", name=("train_data_img1_%d" % index))
-            render(img2, mode="image", name=("train_data_img2_%d" % index))
-            render(
-                affine2_to_1, mode="matrix", name=("train_data_affine2to1_%d" % index)
+            self._render(img, mode="image", name=("train_data_img_%d" % index))
+            self._render(t_img, mode="image", name=("train_data_t_img_%d" % index))
+            self._render(
+                affine_t_to_norm,
+                mode="matrix",
+                name=("train_data_affine2to1_%d" % index),
             )
-            render(mask_img1, mode="mask", name=("train_data_mask_%d" % index))
+            self._render(mask, mode="mask", name=("train_data_mask_%d" % index))
 
-        return img1, img2, affine2_to_1, mask_img1
+        return img, t_img, affine_t_to_norm, mask
 
     def _prepare_train_single(self, index, img, label):
-        # Returns one pair only, i.e. without transformed second image.
-        # Used for standard CNN training (baselines).
-        # This returns gpu tensors.
-        # label is passed in canonical [0 ... 181] indexing
-
         assert img.shape[:2] == label.shape
-        img = img.astype(np.float32)
-        label = label.astype(np.int32)
 
-        # shrink original images, for memory purposes, otherwise no point
-        if self.pre_scale_all:
-            assert self.pre_scale_factor < 1.0
-            img = cv2.resize(
-                img,
-                dsize=None,
-                fx=self.pre_scale_factor,
-                fy=self.pre_scale_factor,
-                interpolation=cv2.INTER_LINEAR,
-            )
-            label = cv2.resize(
-                label,
-                dsize=None,
-                fx=self.pre_scale_factor,
-                fy=self.pre_scale_factor,
-                interpolation=cv2.INTER_NEAREST,
-            )
+        # PREPARE IMAGE AND LABEL
+        img = self._preprocess_general_train(img, np.float32, cv2.INTER_LINEAR)
+        label = self._preprocess_general_train(label, np.int32, cv2.INTER_NEAREST)
+        img, label = self._pad_and_crop(img, label, ("random", "fixed"))
 
-        if self.use_random_scale:
-            # bilinear interp requires float img
-            scale_factor = (
-                np.random.rand() * (self.scale_max - self.scale_min)
-            ) + self.scale_min
-            img = cv2.resize(
-                img,
-                dsize=None,
-                fx=scale_factor,
-                fy=scale_factor,
-                interpolation=cv2.INTER_LINEAR,
-            )
-            label = cv2.resize(
-                label,
-                dsize=None,
-                fx=scale_factor,
-                fy=scale_factor,
-                interpolation=cv2.INTER_NEAREST,
-            )
+        # PREPROCESS SINGLE IMAGE
+        img, _ = self._preprocess_transformed(img)
 
-        # random crop to input sz
-        img, coords = pad_and_or_crop(img, self.input_sz, mode="random")
-        label, _ = pad_and_or_crop(label, self.input_sz, mode="fixed", coords=coords)
-
-        _, mask_img1 = self._filter_label(label)
-        # uint8 tensor as masks should be binary, also for consistency with
-        # prepare_train, but converted to float32 in main loop because is used
-        # multiplicatively in loss
-        mask_img1 = torch.from_numpy(mask_img1.astype(np.uint8)).cuda()
-
-        # converting to PIL does not change underlying np datatype it seems
-        img1 = Image.fromarray(img.astype(np.uint8))
-
-        img1 = self.jitter_tf(img1)  # not in place, new memory
-        img1 = np.array(img1)
-
-        # channels still last
-        if not self.no_sobel:
-            img1 = custom_greyscale_numpy(img1, include_rgb=self.include_rgb)
-
-        img1 = img1.astype(np.float32) / 255.0
-
-        # convert both to channel-first tensor format
-        # make them all cuda tensors now, except label, for optimality
-        img1 = torch.from_numpy(img1).permute(2, 0, 1).cuda()
-
-        # mask if required
-        if self.mask_input:
-            masked = 1 - mask_img1
-            img1[:, masked] = 0
-
-        if self.use_random_affine:
-            affine_kwargs = {
-                "min_rot": self.aff_min_rot,
-                "max_rot": self.aff_max_rot,
-                "min_shear": self.aff_min_shear,
-                "max_shear": self.aff_max_shear,
-                "min_scale": self.aff_min_scale,
-                "max_scale": self.aff_max_scale,
-            }
-            img1, _, _ = random_affine(img1, **affine_kwargs)  # tensors
-
-        if np.random.rand() > self.flip_p:
-            img1 = torch.flip(img1, dims=[2])  # horizontal, along width
+        # CREATE AND USE MASK
+        _, mask = self._generate_mask(label)
+        img = self._apply_mask(img, mask)
 
         if RENDER_DATA:
-            render(img1, mode="image", name=("train_data_img1_%d" % index))
-            render(mask_img1, mode="mask", name=("train_data_mask_%d" % index))
+            self._render(img, mode="image", name=("train_data_img_%d" % index))
+            self._render(mask, mode="mask", name=("train_data_mask_%d" % index))
 
-        return img1, mask_img1
+        return img, mask
 
     def _prepare_test(self, index, img, label):
-        # This returns cpu tensors.
-        #   Image: 3D with channels last, float32, in range [0, 1] (normally done
-        #     by ToTensor).
-        #   Label map: 2D, flat int64, [0 ... sef.gt_k - 1]
-        # label is passed in canonical [0 ... 181] indexing
-
         assert img.shape[:2] == label.shape
-        img = img.astype(np.float32)
-        label = label.astype(np.int32)
 
-        # shrink original images, for memory purposes, otherwise no point
-        if self.pre_scale_all:
-            assert self.pre_scale_factor < 1.0
-            img = cv2.resize(
-                img,
-                dsize=None,
-                fx=self.pre_scale_factor,
-                fy=self.pre_scale_factor,
-                interpolation=cv2.INTER_LINEAR,
-            )
-            label = cv2.resize(
-                label,
-                dsize=None,
-                fx=self.pre_scale_factor,
-                fy=self.pre_scale_factor,
-                interpolation=cv2.INTER_NEAREST,
-            )
+        # PREPARE IMAGE AND LABEL
+        img = self._preprocess_general_test(img, np.float32, cv2.INTER_LINEAR)
+        label = self._preprocess_general_test(label, np.int32, cv2.INTER_NEAREST)
+        img, label = self._pad_and_crop(img, label, ("centre", "centre"))
 
-        # center crop to input sz
-        img, _ = pad_and_or_crop(img, self.input_sz, mode="centre")
-        label, _ = pad_and_or_crop(label, self.input_sz, mode="centre")
-
-        # finish
-        if not self.no_sobel:
-            img = custom_greyscale_numpy(img, include_rgb=self.include_rgb)
-
-        img = img.astype(np.float32) / 255.0
-        img = torch.from_numpy(img).permute(2, 0, 1)
+        # PREPROCESS IMAGE
+        img = self._preprocess_train(img)
 
         if RENDER_DATA:
-            render(label, mode="label", name=("test_data_label_pre_%d" % index))
+            self._render(label, mode="label", name=("test_data_label_pre_%d" % index))
 
-        # convert to coarse if required, reindex to [0, gt_k -1], and get mask
-        label, mask = self._filter_label(label)
-
-        # mask if required
-        if self.mask_input:
-            masked = 1 - mask
-            img[:, masked] = 0
+        label, mask = self._generate_mask(label)
+        img = self._apply_mask(img, mask)
 
         if RENDER_DATA:
-            render(img, mode="image", name=("test_data_img_%d" % index))
-            render(label, mode="label", name=("test_data_label_post_%d" % index))
-            render(mask, mode="mask", name=("test_data_mask_%d" % index))
+            self._render(img, mode="image", name=("test_data_img_%d" % index))
+            self._render(label, mode="label", name=("test_data_label_post_%d" % index))
+            self._render(mask, mode="mask", name=("test_data_mask_%d" % index))
 
-        # dataloader must return tensors (conversion forced in their code anyway)
-        return img, torch.from_numpy(label), torch.from_numpy(mask.astype(np.uint8))
+        return img, label, mask
 
     def __getitem__(self, index):
         image_id = self.files[index]
         image, label = self._load_data(image_id)
 
-        if self.purpose == "train":
-            if not self.single_mode:
-                return self._prepare_train(index, image, label)
-            else:
-                return self._prepare_train_single(index, image, label)
+        if self.purpose == "train" and self.single_mode:
+            return self._prepare_train_single(index, image, label)
+        elif self.purpose == "train":
+            return self._prepare_train(index, image, label)
         else:
             assert self.purpose == "test"
             return self._prepare_test(index, image, label)
 
     def __len__(self):
         return len(self.files)
+
+    def _preprocess_general_train(self, img, dtype, interpolation):
+        img = self._preprocess_general_test(img, dtype, interpolation)
+        img = self._scale_random(img, interpolation)
+        return img
+
+    def _preprocess_general_test(self, img, dtype, interpolation):
+        img = img.astype(dtype)
+        img = self._pre_scale(img, interpolation)
+        return img
+
+    def _pre_scale(self, img, interpolation):
+        if self.pre_scale_all:
+            assert self.pre_scale_factor < 1.0
+            img = cv2.resize(
+                img,
+                dsize=None,
+                fx=self.pre_scale_factor,
+                fy=self.pre_scale_factor,
+                interpolation=interpolation,
+            )
+        return img
+
+    def _scale_random(self, img, interpolation):
+        if self.use_random_scale:
+            # bilinear interp requires float img
+            scale_factor = (
+                np.random.rand() * (self.scale_max - self.scale_min)
+            ) + self.scale_min
+            img = cv2.resize(
+                img,
+                dsize=None,
+                fx=scale_factor,
+                fy=scale_factor,
+                interpolation=interpolation,
+            )
+        return img
+
+    def _preprocess_train(self, img):
+        img = self._handle_sobel(img)
+        img = self._rescale_values(img)
+        img = self._prepare_torch(img)
+        return img
+
+    def _preprocess_transformed(self, img):
+        img = self._jitter(img)
+        img = self._preprocess_train(img)
+        img, affine_t_to_norm = self._transform_affine_random(img)
+        img, affine_t_to_norm = self._flip_random(img, affine_t_to_norm)
+        return img, affine_t_to_norm
+
+    def _rescale_values(self, img):
+        return img.astype(np.float32) / 255.0
+
+    def _prepare_torch(self, img):
+        return torch.from_numpy(img).permute(2, 0, 1).cuda()
+
+    def _handle_sobel(self, img):
+        if not self.no_sobel:
+            img = custom_greyscale_numpy(img, include_rgb=self.include_rgb)
+        return img
+
+    def _pad_and_crop(self, img, label, modes: tuple):
+        RAND_FIXED = ("random", "fixed")
+        CENTER_CENTER = ("centre", "centre")
+        assert modes in [RAND_FIXED, CENTER_CENTER]
+        img, coords = pad_and_or_crop(img, self.input_sz, mode=modes[0])
+        if modes[1] != "fixed":
+            coords = None
+        label, _ = pad_and_or_crop(label, self.input_sz, mode=modes[1], coords=coords)
+        return img, label
+
+    def _jitter(self, img):
+        img = Image.fromarray(img.astype(np.uint8))
+        img = self.jitter_tf(img)
+        img = np.array(img)
+        return img
+
+    def _transform_affine_random(self, t_img):
+        if self.use_random_affine:
+            affine_kwargs = {
+                "min_rot": self.aff_min_rot,
+                "max_rot": self.aff_max_rot,
+                "min_shear": self.aff_min_shear,
+                "max_shear": self.aff_max_shear,
+                "min_scale": self.aff_min_scale,
+                "max_scale": self.aff_max_scale,
+            }
+            t_img, _, affine_t_to_norm = random_affine(t_img, **affine_kwargs)  #
+            # tensors
+        else:
+            affine_t_to_norm = torch.zeros([2, 3]).to(torch.float32).cuda()  # identity
+            affine_t_to_norm[0, 0] = 1
+            affine_t_to_norm[1, 1] = 1
+        return t_img, affine_t_to_norm
+
+    def _flip_random(self, img, affine_t_to_norm):
+        if np.random.rand() > self.flip_p:
+            img = torch.flip(img, dims=[2])
+            affine_t_to_norm[0, :] *= -1.0
+        return img, affine_t_to_norm
+
+    def _generate_mask(self, label):
+        label_out, mask = self._filter_label(label)
+        mask = torch.from_numpy(mask.astype(np.uint8)).cuda()
+        return label_out, mask
+
+    def _apply_mask(self, img, mask):
+        if self.mask_input:
+            masked = 1 - mask
+            img[:, masked] = 0
+        return img
+
+    def _render(self, img, mode, name):
+        render(img, mode=mode, name=name, out_dir=self._render_folder)
 
     def _check_gt_k(self):
         raise NotImplementedError()
