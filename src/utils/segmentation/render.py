@@ -21,6 +21,8 @@ def render(data, mode, name, colour_map=None, offset=0, out_dir=""):
         render(data[i, :, :, :], mode=mode, name=(name + "_%d" % (i + offset)),
                out_dir=out_dir)
       return
+    elif len(data.shape) == 2:
+        data = data[:, :, np.newaxis]
     else:
       assert (len(data.shape) == 3)
   else:
