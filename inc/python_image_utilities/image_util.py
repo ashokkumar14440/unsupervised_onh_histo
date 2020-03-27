@@ -10,7 +10,8 @@ import numpy as np
 from PIL import Image
 import scipy.stats
 
-import inc.file_utils.file_utils as file_utils
+# remove . when testing
+from .inc.file_utils.file_utils import get_contents
 
 
 def adjust_gamma(image, gamma=1.0):
@@ -188,7 +189,7 @@ def load_images(folder, ext=None) -> Tuple[List[np.array], List[PurePath]]:
     that extension will be loaded. Also returns the filenames of every loaded
     image.
     """
-    image_files = file_utils.get_contents(folder, ext)
+    image_files = get_contents(folder, ext)
     images = []
     names = []
     for image_file in image_files:
