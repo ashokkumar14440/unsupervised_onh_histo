@@ -10,7 +10,7 @@ import numpy as np
 from PIL import Image
 import scipy.stats
 
-import file_utils
+import inc.file_utils.file_utils as file_utils
 
 
 def adjust_gamma(image, gamma=1.0):
