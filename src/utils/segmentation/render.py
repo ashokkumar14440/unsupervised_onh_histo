@@ -124,6 +124,7 @@ def render(data, mode, name, colour_map=None, offset=0, out_dir=""):
     ax.set_title("Labels for %s, min %s, max %s" % (name, min_ind, max_ind))
     fig.canvas.draw_idle()
     fig.savefig(out_handle + ".png")
+    plt.close(fig)
 
   elif mode == "matrix":
     with open(out_handle + ".txt", "w") as f:
