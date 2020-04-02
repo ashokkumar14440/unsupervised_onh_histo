@@ -92,7 +92,7 @@ class Model:
                 self._net,
                 mapping_assignment_dataloader=self._dataloaders["map_assign"],
                 mapping_test_dataloader=self._dataloaders["map_test"],
-                sobel=(not self._config.preprocessor.sobelize),
+                sobel=(self._config.preprocessor.sobelize),
                 using_IR=self._config.using_IR,
             )
             if "acc" in epoch_stats:
@@ -161,7 +161,7 @@ class Model:
     ):
         self._net.module.zero_grad()
         images = transfer_images(data, self._config)
-        if not self._config.preprocessor.sobelize:
+        if self._config.preprocessor.sobelize:
             images = sobelize(images, self._config)
         outs = process_fn(images)
         losses = compute_losses(self._config, self._loss_fn, lamb, images, outs)

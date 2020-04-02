@@ -66,13 +66,13 @@ class Preprocessor:
             lbl = self._preprocess_general_train(label, np.int32, cv2.INTER_NEAREST)
             img, lbl = self._pad_and_crop(img, lbl, ("random", "fixed"))
             img, _ = self._preprocess_transformed(img)
-            return {"image": img, "label": label}
+            return {"image": img, "label": lbl}
         elif self._purpose == "test":
             img = self._preprocess_general_train(image, np.float32, cv2.INTER_LINEAR)
             lbl = self._preprocess_general_train(label, np.int32, cv2.INTER_NEAREST)
             img, lbl = self._pad_and_crop(img, lbl, ("centre", "centre"))
             img, _ = self._preprocess_transformed(img)
-            return {"image": img, "label": label}
+            return {"image": img, "label": lbl}
         else:
             assert False
 
