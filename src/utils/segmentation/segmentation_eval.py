@@ -57,7 +57,7 @@ def _segmentation_get_data(
     flat_targets_all = torch.zeros(
         (num_batches * samples_per_batch), dtype=torch.uint8
     ).cuda()
-    mask_all = torch.zeros((num_batches * samples_per_batch), dtype=torch.uint8).cuda()
+    mask_all = torch.zeros((num_batches * samples_per_batch), dtype=torch.bool).cuda()
 
     batch_start = None
     all_start = None
