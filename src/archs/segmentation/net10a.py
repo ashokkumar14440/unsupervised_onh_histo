@@ -53,8 +53,7 @@ class SegmentationNet10aHead(nn.Module):
     results = []
     for i in range(self.num_sub_heads):
       x_i = self.heads[i](x)
-      x_i = F.interpolate(x_i, size=self.input_sz, mode="bilinear")
-      results.append(x_i)
+      x_i = F.interpolate(x_i, size=self.input_sz, mode="bilinear", align_corners=True)
 
     return results
 
