@@ -75,7 +75,7 @@ class Model:
     def train(self):
         epoch_stats = EpochStatistics()
         for epoch_number in range(self._config.starting_epoch, self._config.num_epochs):
-            print("Starting epoch: {epoch:4d}".format(epoch=epoch_number))
+            print("Starting epoch: {epoch:4d}".format(epoch=epoch_number + 1))
 
             # PREPARE
             if epoch_number in self._config.lr_schedule:
