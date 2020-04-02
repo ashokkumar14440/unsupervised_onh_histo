@@ -8,43 +8,43 @@ from src.scripts.segmentation import data
 
 
 def segmentation_create_dataloaders(config):
-    if config.mode == "IID+":
-        if "Coco10k" in config.dataset:
-            config.train_partitions = ["train"]
-            config.mapping_assignment_partitions = ["train"]
-            config.mapping_test_partitions = ["test"]
-        elif "Coco164k" in config.dataset:
-            config.train_partitions = ["train2017"]
-            config.mapping_assignment_partitions = ["train2017"]
-            config.mapping_test_partitions = ["val2017"]
-        elif config.dataset == "Potsdam":
-            config.train_partitions = ["unlabelled_train", "labelled_train"]
-            config.mapping_assignment_partitions = ["labelled_train"]
-            config.mapping_test_partitions = ["labelled_test"]
-        else:
-            raise NotImplementedError
+    # if config.mode == "IID+":
+    #     if "Coco10k" in config.dataset:
+    #         config.train_partitions = ["train"]
+    #         config.mapping_assignment_partitions = ["train"]
+    #         config.mapping_test_partitions = ["test"]
+    #     elif "Coco164k" in config.dataset:
+    #         config.train_partitions = ["train2017"]
+    #         config.mapping_assignment_partitions = ["train2017"]
+    #         config.mapping_test_partitions = ["val2017"]
+    #     elif config.dataset == "Potsdam":
+    #         config.train_partitions = ["unlabelled_train", "labelled_train"]
+    #         config.mapping_assignment_partitions = ["labelled_train"]
+    #         config.mapping_test_partitions = ["labelled_test"]
+    #     else:
+    #         raise NotImplementedError
 
-    elif config.mode == "IID":
-        if "Coco10k" in config.dataset:
-            config.train_partitions = ["all"]
-            config.mapping_assignment_partitions = ["all"]
-            config.mapping_test_partitions = ["all"]
-        elif "Coco164k" in config.dataset:
-            config.train_partitions = ["train2017", "val2017"]
-            config.mapping_assignment_partitions = ["train2017", "val2017"]
-            config.mapping_test_partitions = ["train2017", "val2017"]
-        elif config.dataset == "Potsdam":
-            config.train_partitions = [
-                "unlabelled_train",
-                "labelled_train",
-                "labelled_test",
-            ]
-            config.mapping_assignment_partitions = ["labelled_train", "labelled_test"]
-            config.mapping_test_partitions = ["labelled_train", "labelled_test"]
-        else:
-            raise NotImplementedError
+    # elif config.mode == "IID":
+    #     if "Coco10k" in config.dataset:
+    #         config.train_partitions = ["all"]
+    #         config.mapping_assignment_partitions = ["all"]
+    #         config.mapping_test_partitions = ["all"]
+    #     elif "Coco164k" in config.dataset:
+    #         config.train_partitions = ["train2017", "val2017"]
+    #         config.mapping_assignment_partitions = ["train2017", "val2017"]
+    #         config.mapping_test_partitions = ["train2017", "val2017"]
+    #     elif config.dataset == "Potsdam":
+    #         config.train_partitions = [
+    #             "unlabelled_train",
+    #             "labelled_train",
+    #             "labelled_test",
+    #         ]
+    #         config.mapping_assignment_partitions = ["labelled_train", "labelled_test"]
+    #         config.mapping_test_partitions = ["labelled_train", "labelled_test"]
+    #     else:
+    #         raise NotImplementedError
 
-    if "Coco" in config.dataset:
+    if "Coco" in config.dataset.name:
         dataloaders, mapping_assignment_dataloader, mapping_test_dataloader = make_Coco_dataloaders(
             config
         )
@@ -55,72 +55,53 @@ def segmentation_create_dataloaders(config):
 
 
 def make_Coco_dataloaders(config):
-    dataloaders = _create_dataloaders(
-        config, data.__dict__[config.dataset]
-    )  # type: ignore
+    dataset_class = data.__dict__[config.dataset.name]
+    dataloaders = _create_dataloaders(config, dataset_class, "train")  # type: ignore
 
     mapping_assignment_dataloader = _create_mapping_loader(
         config,
-        data.__dict__[config.dataset],  # type: ignore
-        partitions=config.mapping_assignment_partitions,
+        dataset_class,  # type: ignore
+        partitions=config.dataset.partitions.map_assign,
     )
 
     mapping_test_dataloader = _create_mapping_loader(
         config,
-        data.__dict__[config.dataset],  # type: ignore
-        partitions=config.mapping_test_partitions,
+        dataset_class,  # type: ignore
+        partitions=config.dataset.partitions.map_test,
     )
 
     return dataloaders, mapping_assignment_dataloader, mapping_test_dataloader
 
 
-def _create_dataloaders(config, dataset_class):
+def _create_dataloaders(config, dataset_class, purpose):
     # unlike in clustering, each dataloader here returns pairs of images - we
     # need the matrix relation between them
     dataloaders = []
-    do_shuffle = config.num_dataloaders == 1
-    for d_i in range(config.num_dataloaders):
-        print(
-            (
-                "Creating paired dataloader %d out of %d time %s"
-                % (d_i, config.num_dataloaders, datetime.now())
-            )
-        )
-        sys.stdout.flush()
-
-        train_imgs_list = []
-        for train_partition in config.train_partitions:
-            train_imgs_curr = dataset_class(
-                **{
-                    "config": config,
-                    "split": train_partition,
-                    "purpose": "train",
-                }  # return training tuples, not including labels
-            )
-
-            train_imgs_list.append(train_imgs_curr)
-
-        train_imgs = ConcatDataset(train_imgs_list)
-
+    do_shuffle = config.dataset.num_dataloaders == 1
+    count = config.dataset.num_dataloaders
+    for d_i in range(count):
+        print("Creating dataloader {:d}/{:d}".format(d_i + 1, count))
         train_dataloader = torch.utils.data.DataLoader(
-            train_imgs,
-            batch_size=config.dataloader_batch_sz,
+            _create_dataset(config, dataset_class, purpose),
+            batch_size=config.dataloader_batch_size,
             shuffle=do_shuffle,
             num_workers=0,
             drop_last=False,
         )
-
         if d_i > 0:
             assert len(train_dataloader) == len(dataloaders[d_i - 1])
-
         dataloaders.append(train_dataloader)
 
-    num_train_batches = len(dataloaders[0])
-    print(("Length of paired datasets vector %d" % len(dataloaders)))
-    print(("Number of batches per epoch: %d" % num_train_batches))
-    sys.stdout.flush()
-
+    print(("Number of batches per epoch: {:d}".format(len(dataloaders[0]))))
     return dataloaders
+
+
+def _create_dataset(config, dataset_class, purpose):
+    train_images = [
+        dataset_class(**{"config": config, "split": partition, "purpose": purpose})
+        for partition in config.dataset.partitions.train
+    ]
+    return ConcatDataset(train_images)
 
 
 def _create_mapping_loader(config, dataset_class, partitions):
@@ -138,7 +119,7 @@ def _create_mapping_loader(config, dataset_class, partitions):
     imgs = ConcatDataset(imgs_list)
     dataloader = torch.utils.data.DataLoader(
         imgs,
-        batch_size=config.batch_sz,
+        batch_size=config.dataset.batch_size,
         # full batch
         shuffle=False,
         # no point since not trained on

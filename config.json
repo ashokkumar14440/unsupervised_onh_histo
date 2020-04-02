@@ -5,14 +5,25 @@
     "arch": "SegmentationNet10aTwoHead",
     "opt": "Adam",
     "mode": "IID",
-    "dataset": "Coco164kCuratedFew",
-    "dataset_root": "./datasets/cocostuff_small",
+    "dataset": {
+      "name": "Coco164kCuratedFew",
+      "root": "./datasets/cocostuff_small",
+      "num_dataloaders": 1,
+      "batch_size": 120,
+      "partitions": {
+        "train": ["train2017", "val2017"],
+        "map_assign": ["train2017", "val2017"],
+        "map_test": ["train2017", "val2017"]
+      },
+      "parameters": {
+        "fine_to_coarse_dict": "./datasets/cocostuff/fine_to_coarse_dict",
+        "use_coarse_labels": true,
+        "include_things_labels": false,
+        "include_animal_things": false
+      }
+    },
     "render_root": "./out/renders",
     "out_root": "./out",
-    "use_coarse_labels": true,
-    "fine_to_coarse_dict": "./datasets/cocostuff/fine_to_coarse_dict",
-    "include_things_labels": false,
-    "incl_animal_things": false,
     "coco_164k_curated_version": 6,
     "gt_k": 3,
     "output_k_A": 15,
@@ -26,8 +37,6 @@
     "num_epochs": 5,
     "batch_print_freq": 5,
     "save_freq": 1,
-    "batch_sz": 120,
-    "num_dataloaders": 1,
     "num_sub_heads": 1,
     "test_code": false,
     "batchnorm_track": true,

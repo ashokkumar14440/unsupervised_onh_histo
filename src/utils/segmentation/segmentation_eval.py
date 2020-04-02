@@ -43,7 +43,7 @@ def _segmentation_get_data(
     num_samples = 0
 
     # upper bound, will be less for last batch
-    samples_per_batch = config.batch_sz * config.input_sz * config.input_sz
+    samples_per_batch = config.dataset.batch_size * config.input_sz * config.input_sz
 
     if verbose > 0:
         print("started _segmentation_get_data %s" % datetime.now())

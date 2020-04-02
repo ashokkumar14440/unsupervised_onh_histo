@@ -1,7 +1,7 @@
 from pathlib import Path, PurePath
 from types import SimpleNamespace
 
-from inc.config_snake.config import ConfigFile
+from inc.config_snake.config import ConfigFile, ConfigDict
 from src.utils.segmentation.data import segmentation_create_dataloaders
 from src.utils.segmentation.general import set_segmentation_input_channels
 
@@ -19,6 +19,7 @@ def interface():
     config = config_file.segmentation
     config = config.to_json()
     config = SimpleNamespace(**config)
+    config.dataset = ConfigDict(config, config.dataset)
 
     assert config.mode == "IID"
     assert "TwoHead" in config.arch
@@ -28,7 +29,9 @@ def interface():
     if "last_epoch" not in config.__dict__:
         config.last_epoch = 0
     config.out_dir = str(Path(config.out_root).resolve() / str(config.model_ind))
-    config.dataloader_batch_sz = int(config.batch_sz / config.num_dataloaders)
+    config.dataloader_batch_size = int(
+        config.dataset.batch_size / config.dataset.num_dataloaders
+    )
     config.output_k = config.output_k_B  # for eval code
     config.use_doersch_datasets = False
     config.eval_mode = "hung"

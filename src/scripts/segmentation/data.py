@@ -12,6 +12,7 @@ import cv2
 import numpy as np
 import scipy.io as sio
 import torch
+from torch.utils.data.dataset import ConcatDataset
 import torchvision.transforms as tvt
 from PIL import Image
 from torch.utils import data
@@ -56,7 +57,7 @@ class _Coco(data.Dataset):
         self.split = split
         self.purpose = purpose
 
-        self.root = config.dataset_root
+        self.root = config.dataset.root
         self._render_folder = config.render_root
         Path(self._render_folder).mkdir(parents=True, exist_ok=True)
 
@@ -105,10 +106,11 @@ class _Coco(data.Dataset):
         self.images = []
         self.labels = []
 
-        if not osp.exists(config.fine_to_coarse_dict):
-            generate_fine_to_coarse(config.fine_to_coarse_dict)
+        fine_to_coarse_dict = config.dataset.parameters.fine_to_coarse_dict
+        if not osp.exists(fine_to_coarse_dict):
+            generate_fine_to_coarse(fine_to_coarse_dict)
 
-        with open(config.fine_to_coarse_dict, "rb") as dict_f:
+        with open(fine_to_coarse_dict, "rb") as dict_f:
             d = pickle.load(dict_f)
             self._fine_to_coarse_dict = d["fine_index_to_coarse_index"]
 
@@ -425,23 +427,25 @@ class _Coco164kCuratedFew(_Coco):
 
         # work out name
         config = kwargs["config"]
-        assert config.use_coarse_labels  # we only deal with coarse labels
-        self.include_things_labels = config.include_things_labels  # people
-        self.incl_animal_things = config.incl_animal_things  # animals
+        assert (
+            config.dataset.parameters.use_coarse_labels
+        )  # we only deal with coarse labels
+        self.include_things_labels = config.dataset.parameters.include_things_labels
+        self.include_animal_things = config.dataset.parameters.include_animal_things
 
         version = config.coco_164k_curated_version
 
         name = "Coco164kFew_Stuff"
-        if self.include_things_labels and self.incl_animal_things:
+        if self.include_things_labels and self.include_animal_things:
             name += "_People_Animals"
         elif self.include_things_labels:
             name += "_People"
-        elif self.incl_animal_things:
+        elif self.include_animal_things:
             name += "_Animals"
 
         self.name = name + "_%d" % version
 
-        print("Specific type of _Coco164kCuratedFew dataset: %s" % self.name)
+        # print("Specific type of _Coco164kCuratedFew dataset: %s" % self.name)
 
         self._set_files()
 
@@ -484,16 +488,15 @@ class _Coco164kCuratedFull(_Coco):
 
         # work out name
         config = kwargs["config"]
-        assert config.use_coarse_labels  # we only deal with coarse labels
-
+        assert config.dataset.parameters.use_coarse_labels
         assert not config.include_things_labels
-        assert not config.incl_animal_things
+        assert not config.include_animal_things
 
         version = config.coco_164k_curated_version
 
         self.name = "Coco164kFull_Stuff_Coarse_%d" % version
 
-        print("Specific type of _Coco164kCuratedFull dataset: %s" % self.name)
+        # print("Specific type of _Coco164kCuratedFull dataset: %s" % self.name)
 
         self._set_files()
 
@@ -543,8 +546,8 @@ class _CocoFull(_Coco):
         config = kwargs["config"]
 
         # if coarse, index corresponds to order in cocostuff_fine_to_coarse.py
-        self.use_coarse_labels = config.use_coarse_labels
-        self.include_things_labels = config.include_things_labels
+        assert config.dataset.parameters.use_coarse_labels
+        self.include_things_labels = config.dataset.parameters.include_things_labels
 
         self._check_gt_k()
 
@@ -614,9 +617,11 @@ class _CocoFew(_Coco):
         super(_CocoFew, self).__init__(**kwargs)
 
         config = kwargs["config"]
-        assert config.use_coarse_labels  # we only deal with coarse labels
-        self.include_things_labels = config.include_things_labels
-        self.incl_animal_things = config.incl_animal_things
+        assert (
+            config.dataset.parameters.use_coarse_labels
+        )  # we only deal with coarse labels
+        self.include_things_labels = config.dataset.parameters.include_things_labels
+        self.include_animal_things = config.dataset.parameters.include_animal_things
 
         self._check_gt_k()
 
@@ -627,7 +632,7 @@ class _CocoFew(_Coco):
         if self.include_things_labels:
             self.label_names += ["person-things"]
 
-        if self.incl_animal_things:
+        if self.include_animal_things:
             self.label_names += ["animal-things"]
 
         assert len(self.label_names) == self.gt_k
@@ -644,8 +649,8 @@ class _CocoFew(_Coco):
             )
             self.label_orig_coarse_inds.append(orig_coarse_ind)
 
-        print("label_orig_coarse_inds for this dataset: ")
-        print(self.label_orig_coarse_inds)
+        # print("label_orig_coarse_inds for this dataset: ")
+        # print(self.label_orig_coarse_inds)
 
         # excludes -1 (fine - see usage in filter label - as with Coco10kFull)
         _fine_to_few_dict = {}
@@ -669,7 +674,7 @@ class _CocoFew(_Coco):
         expected_gt_k = 3
         if self.include_things_labels:
             expected_gt_k += 1
-        if self.incl_animal_things:
+        if self.include_animal_things:
             expected_gt_k += 1
 
         assert self.gt_k == expected_gt_k

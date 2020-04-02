@@ -22,7 +22,7 @@ MASK = 3
 def transfer_images(loader_tuple, config):
     images = create_image_list(config)
     current_batch_size = get_dataloader_batch_size(loader_tuple)
-    for index in range(config.num_dataloaders):
+    for index in range(config.dataset.num_dataloaders):
         img1, img2, affine2_to_1, mask_img1 = loader_tuple[index]
         assert img1.shape[0] == current_batch_size
 
@@ -39,7 +39,7 @@ def transfer_images(loader_tuple, config):
         # ):
         #     print("last batch sz %d" % curr_batch_sz)
 
-        total_size = current_batch_size * config.num_dataloaders  # times 2
+        total_size = current_batch_size * config.dataset.num_dataloaders  # times 2
         images[IMAGE_1] = images[IMAGE_1][:total_size, :, :, :]
         images[IMAGE_2] = images[IMAGE_2][:total_size, :, :, :]
         images[AFFINE] = images[AFFINE][:total_size, :, :]
@@ -101,18 +101,21 @@ def create_image_list(config):
 
 def create_empty(config):
     empty = torch.zeros(
-        config.batch_sz, get_channel_count(config), config.input_sz, config.input_sz
+        config.dataset.batch_size,
+        get_channel_count(config),
+        config.input_sz,
+        config.input_sz,
     )
     return empty.to(torch.float32).cuda()
 
 
 def create_empty_affine(config):
-    empty = torch.zeros(config.batch_sz, 2, 3)
+    empty = torch.zeros(config.dataset.batch_size, 2, 3)
     return empty.to(torch.float32).cuda()
 
 
 def create_empty_mask(config):
-    empty = torch.zeros(config.batch_sz, config.input_sz, config.input_sz)
+    empty = torch.zeros(config.dataset.batch_size, config.input_sz, config.input_sz)
     return empty.to(torch.float32).cuda()
 
 
