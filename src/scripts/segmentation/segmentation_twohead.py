@@ -33,7 +33,6 @@ def interface():
         config.dataset.batch_size / config.dataset.num_dataloaders
     )
     config.output_k = config.output_k_B  # for eval code
-    config.use_doersch_datasets = False
     config.eval_mode = "hung"
     # TODO better mechanism for identifying number of channels in data
     # TODO more robust transform into desired number of channels
