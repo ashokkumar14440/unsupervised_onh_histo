@@ -1,3 +1,4 @@
+from src.scripts.segmentation.preprocess import Preprocessor
 import sys
 from datetime import datetime
 
@@ -7,67 +8,22 @@ from torch.utils.data import ConcatDataset
 from src.scripts.segmentation import data
 
 
-def segmentation_create_dataloaders(config):
-    # if config.mode == "IID+":
-    #     if "Coco10k" in config.dataset:
-    #         config.train_partitions = ["train"]
-    #         config.mapping_assignment_partitions = ["train"]
-    #         config.mapping_test_partitions = ["test"]
-    #     elif "Coco164k" in config.dataset:
-    #         config.train_partitions = ["train2017"]
-    #         config.mapping_assignment_partitions = ["train2017"]
-    #         config.mapping_test_partitions = ["val2017"]
-    #     elif config.dataset == "Potsdam":
-    #         config.train_partitions = ["unlabelled_train", "labelled_train"]
-    #         config.mapping_assignment_partitions = ["labelled_train"]
-    #         config.mapping_test_partitions = ["labelled_test"]
-    #     else:
-    #         raise NotImplementedError
-
-    # elif config.mode == "IID":
-    #     if "Coco10k" in config.dataset:
-    #         config.train_partitions = ["all"]
-    #         config.mapping_assignment_partitions = ["all"]
-    #         config.mapping_test_partitions = ["all"]
-    #     elif "Coco164k" in config.dataset:
-    #         config.train_partitions = ["train2017", "val2017"]
-    #         config.mapping_assignment_partitions = ["train2017", "val2017"]
-    #         config.mapping_test_partitions = ["train2017", "val2017"]
-    #     elif config.dataset == "Potsdam":
-    #         config.train_partitions = [
-    #             "unlabelled_train",
-    #             "labelled_train",
-    #             "labelled_test",
-    #         ]
-    #         config.mapping_assignment_partitions = ["labelled_train", "labelled_test"]
-    #         config.mapping_test_partitions = ["labelled_train", "labelled_test"]
-    #     else:
-    #         raise NotImplementedError
-
-    if "Coco" in config.dataset.name:
-        dataloaders, mapping_assignment_dataloader, mapping_test_dataloader = make_Coco_dataloaders(
-            config
-        )
-    else:
-        raise NotImplementedError
-
-    return dataloaders, mapping_assignment_dataloader, mapping_test_dataloader
-
-
-def make_Coco_dataloaders(config):
+def build_dataloaders(config):
     dataset_class = data.__dict__[config.dataset.name]
     dataloaders = _create_dataloaders(config, dataset_class, "train")  # type: ignore
 
     mapping_assignment_dataloader = _create_mapping_loader(
         config,
         dataset_class,  # type: ignore
-        partitions=config.dataset.partitions.map_assign,
+        config.dataset.partitions.map_assign,
+        "test",
     )
 
     mapping_test_dataloader = _create_mapping_loader(
         config,
         dataset_class,  # type: ignore
-        partitions=config.dataset.partitions.map_test,
+        config.dataset.partitions.map_test,
+        "test",
     )
 
     return dataloaders, mapping_assignment_dataloader, mapping_test_dataloader
@@ -81,8 +37,9 @@ def _create_dataloaders(config, dataset_class, purpose):
     count = config.dataset.num_dataloaders
     for d_i in range(count):
         print("Creating dataloader {:d}/{:d}".format(d_i + 1, count))
+        preprocessor = Preprocessor(config, purpose)
         train_dataloader = torch.utils.data.DataLoader(
-            _create_dataset(config, dataset_class, purpose),
+            _create_dataset(config, dataset_class, purpose, preprocessor),
             batch_size=config.dataloader_batch_size,
             shuffle=do_shuffle,
             num_workers=0,
@@ -96,29 +53,10 @@ def _create_dataloaders(config, dataset_class, purpose):
     return dataloaders
 
 
-def _create_dataset(config, dataset_class, purpose):
-    train_images = [
-        dataset_class(**{"config": config, "split": partition, "purpose": purpose})
-        for partition in config.dataset.partitions.train
-    ]
-    return ConcatDataset(train_images)
-
-
-def _create_mapping_loader(config, dataset_class, partitions):
-    imgs_list = []
-    for partition in partitions:
-        imgs_curr = dataset_class(
-            **{
-                "config": config,
-                "split": partition,
-                "purpose": "test",
-            }  # return testing tuples, image and label
-        )
-        imgs_list.append(imgs_curr)
-
-    imgs = ConcatDataset(imgs_list)
-    dataloader = torch.utils.data.DataLoader(
-        imgs,
+def _create_mapping_loader(config, dataset_class, partitions, purpose):
+    preprocessor = Preprocessor(config, purpose)
+    return torch.utils.data.DataLoader(
+        _create_dataset(config, dataset_class, purpose, preprocessor),
         batch_size=config.dataset.batch_size,
         # full batch
         shuffle=False,
@@ -126,4 +64,19 @@ def _create_mapping_loader(config, dataset_class, partitions):
         num_workers=0,
         drop_last=False,
     )
-    return dataloader
+
+
+def _create_dataset(config, dataset_class, purpose, preprocessor):
+    train_images = [
+        dataset_class(
+            **{
+                "config": config,
+                "split": partition,
+                "purpose": purpose,
+                "preload": False,
+                "preprocessor": preprocessor,
+            }
+        )
+        for partition in config.dataset.partitions.train
+    ]
+    return ConcatDataset(train_images)

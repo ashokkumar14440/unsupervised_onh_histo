@@ -2,7 +2,7 @@ from pathlib import Path, PurePath
 from types import SimpleNamespace
 
 from inc.config_snake.config import ConfigFile, ConfigDict
-from src.utils.segmentation.data import segmentation_create_dataloaders
+from src.utils.segmentation.data import build_dataloaders
 from src.utils.segmentation.general import set_segmentation_input_channels
 
 from model import Model
@@ -20,6 +20,8 @@ def interface():
     config = config.to_json()
     config = SimpleNamespace(**config)
     config.dataset = ConfigDict(config, config.dataset)
+    config.preprocessor = ConfigDict(config, config.preprocessor)
+    config.transformations = ConfigDict(config, config.transformations)
 
     assert config.mode == "IID"
     assert "TwoHead" in config.arch
@@ -46,7 +48,7 @@ def interface():
 
 
 def train(config):
-    head_A, map_assign, map_test = segmentation_create_dataloaders(config)
+    head_A, map_assign, map_test = build_dataloaders(config)
     dataloaders = {
         "A": head_A,
         "B": head_A,

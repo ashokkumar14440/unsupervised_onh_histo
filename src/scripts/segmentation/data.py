@@ -7,6 +7,7 @@ import os.path as osp
 from pathlib import Path
 import pickle
 from glob import glob
+from src.scripts.segmentation.preprocess import Preprocessor
 
 import cv2
 import numpy as np
@@ -25,6 +26,8 @@ from ...utils.segmentation.transforms import (
     random_affine,
     custom_greyscale_numpy,
 )
+
+from src.scripts.segmentation.preprocess import Preprocessor
 
 __all__ = [
     "Coco10kFull",
@@ -51,7 +54,7 @@ class _Coco(data.Dataset):
   For both 10k and 164k (though latter is unimplemented)
   """
 
-    def __init__(self, config=None, split=None, purpose=None, preload=False):
+    def __init__(self, config, split, purpose, preload, preprocessor: Preprocessor):
         super(_Coco, self).__init__()
 
         self.split = split
@@ -65,40 +68,12 @@ class _Coco(data.Dataset):
 
         # always used (labels fields used to make relevancy mask for train)
         self.gt_k = config.gt_k
-        self.pre_scale_all = config.pre_scale_all
-        self.pre_scale_factor = config.pre_scale_factor
-        self.input_sz = config.input_sz
+        self.input_sz = config.input_size
 
-        self.include_rgb = config.include_rgb
-        self.no_sobel = config.no_sobel
+        self._preprocessor = preprocessor
 
         assert (not hasattr(config, "mask_input")) or (not config.mask_input)
         self.mask_input = False
-
-        # only used if purpose is train
-        if purpose == "train":
-            self.use_random_scale = config.use_random_scale
-            if self.use_random_scale:
-                self.scale_max = config.scale_max
-                self.scale_min = config.scale_min
-
-            self.jitter_tf = tvt.ColorJitter(
-                brightness=config.jitter_brightness,
-                contrast=config.jitter_contrast,
-                saturation=config.jitter_saturation,
-                hue=config.jitter_hue,
-            )
-
-            self.flip_p = config.flip_p  # 0.5
-
-            self.use_random_affine = config.use_random_affine
-            if self.use_random_affine:
-                self.aff_min_rot = config.aff_min_rot
-                self.aff_max_rot = config.aff_max_rot
-                self.aff_min_shear = config.aff_min_shear
-                self.aff_max_shear = config.aff_max_shear
-                self.aff_min_scale = config.aff_min_scale
-                self.aff_max_scale = config.aff_max_scale
 
         assert not preload
 
@@ -119,17 +94,12 @@ class _Coco(data.Dataset):
     def _prepare_train(self, index, img, label):
         assert img.shape[:2] == label.shape
 
-        # PREPARE IMAGE AND LABEL
-        img = self._preprocess_general_train(img, np.float32, cv2.INTER_LINEAR)
-        label = self._preprocess_general_train(label, np.int32, cv2.INTER_NEAREST)
-        img, label = self._pad_and_crop(img, label, ("random", "fixed"))
-
-        # CREATE TRANSFORMED IMAGE AND PREPROCESS
-        t_img = np.copy(img)
-        t_img, affine_t_to_norm = self._preprocess_transformed(t_img)
-
-        # PREPROCESS ORIGINAL IMAGE
-        img = self._preprocess_train(img)
+        # PREPROCESS
+        result = self._preprocessor.process(img, label)
+        img = result["image"]
+        label = result["label"]
+        affine_inverse = result["affine_inverse"]
+        t_img = result["transformed_image"]
 
         # CREATE AND USE MASK
         _, mask = self._generate_mask(label)
@@ -141,24 +111,21 @@ class _Coco(data.Dataset):
             self._render(img, mode="image", name=("train_data_img_%d" % index))
             self._render(t_img, mode="image", name=("train_data_t_img_%d" % index))
             self._render(
-                affine_t_to_norm,
+                affine_inverse,
                 mode="matrix",
-                name=("train_data_affine2to1_%d" % index),
+                name=("train_data_affine_inverse%d" % index),
             )
             self._render(mask, mode="mask", name=("train_data_mask_%d" % index))
 
-        return img, t_img, affine_t_to_norm, mask
+        return img, t_img, affine_inverse, mask
 
     def _prepare_train_single(self, index, img, label):
         assert img.shape[:2] == label.shape
 
-        # PREPARE IMAGE AND LABEL
-        img = self._preprocess_general_train(img, np.float32, cv2.INTER_LINEAR)
-        label = self._preprocess_general_train(label, np.int32, cv2.INTER_NEAREST)
-        img, label = self._pad_and_crop(img, label, ("random", "fixed"))
-
-        # PREPROCESS SINGLE IMAGE
-        img, _ = self._preprocess_transformed(img)
+        # PREPROCESS
+        result = self._preprocessor.process(img, label)
+        img = result["image"]
+        label = result["label"]
 
         # CREATE AND USE MASK
         _, mask = self._generate_mask(label)
@@ -173,13 +140,10 @@ class _Coco(data.Dataset):
     def _prepare_test(self, index, img, label):
         assert img.shape[:2] == label.shape
 
-        # PREPARE IMAGE AND LABEL
-        img = self._preprocess_general_test(img, np.float32, cv2.INTER_LINEAR)
-        label = self._preprocess_general_test(label, np.int32, cv2.INTER_NEAREST)
-        img, label = self._pad_and_crop(img, label, ("centre", "centre"))
-
-        # PREPROCESS IMAGE
-        img = self._preprocess_train(img)
+        # PREPROCESS
+        result = self._preprocessor.process(img, label)
+        img = result["image"]
+        label = result["label"]
 
         if RENDER_DATA:
             self._render(label, mode="label", name=("test_data_label_pre_%d" % index))
@@ -208,107 +172,6 @@ class _Coco(data.Dataset):
 
     def __len__(self):
         return len(self.files)
-
-    def _preprocess_general_train(self, img, dtype, interpolation):
-        img = self._preprocess_general_test(img, dtype, interpolation)
-        img = self._scale_random(img, interpolation)
-        return img
-
-    def _preprocess_general_test(self, img, dtype, interpolation):
-        img = img.astype(dtype)
-        img = self._pre_scale(img, interpolation)
-        return img
-
-    def _pre_scale(self, img, interpolation):
-        if self.pre_scale_all:
-            assert self.pre_scale_factor < 1.0
-            img = cv2.resize(
-                img,
-                dsize=None,
-                fx=self.pre_scale_factor,
-                fy=self.pre_scale_factor,
-                interpolation=interpolation,
-            )
-        return img
-
-    def _scale_random(self, img, interpolation):
-        if self.use_random_scale:
-            # bilinear interp requires float img
-            scale_factor = (
-                np.random.rand() * (self.scale_max - self.scale_min)
-            ) + self.scale_min
-            img = cv2.resize(
-                img,
-                dsize=None,
-                fx=scale_factor,
-                fy=scale_factor,
-                interpolation=interpolation,
-            )
-        return img
-
-    def _preprocess_train(self, img):
-        img = self._handle_sobel(img)
-        img = self._rescale_values(img)
-        img = self._prepare_torch(img)
-        return img
-
-    def _preprocess_transformed(self, img):
-        img = self._jitter(img)
-        img = self._preprocess_train(img)
-        img, affine_t_to_norm = self._transform_affine_random(img)
-        img, affine_t_to_norm = self._flip_random(img, affine_t_to_norm)
-        return img, affine_t_to_norm
-
-    def _rescale_values(self, img):
-        return img.astype(np.float32) / 255.0
-
-    def _prepare_torch(self, img):
-        return torch.from_numpy(img).permute(2, 0, 1).cuda()
-
-    def _handle_sobel(self, img):
-        if not self.no_sobel:
-            img = custom_greyscale_numpy(img, include_rgb=self.include_rgb)
-        return img
-
-    def _pad_and_crop(self, img, label, modes: tuple):
-        RAND_FIXED = ("random", "fixed")
-        CENTER_CENTER = ("centre", "centre")
-        assert modes in [RAND_FIXED, CENTER_CENTER]
-        img, coords = pad_and_or_crop(img, self.input_sz, mode=modes[0])
-        if modes[1] != "fixed":
-            coords = None
-        label, _ = pad_and_or_crop(label, self.input_sz, mode=modes[1], coords=coords)
-        return img, label
-
-    def _jitter(self, img):
-        img = Image.fromarray(img.astype(np.uint8))
-        img = self.jitter_tf(img)
-        img = np.array(img)
-        return img
-
-    def _transform_affine_random(self, t_img):
-        if self.use_random_affine:
-            affine_kwargs = {
-                "min_rot": self.aff_min_rot,
-                "max_rot": self.aff_max_rot,
-                "min_shear": self.aff_min_shear,
-                "max_shear": self.aff_max_shear,
-                "min_scale": self.aff_min_scale,
-                "max_scale": self.aff_max_scale,
-            }
-            t_img, _, affine_t_to_norm = random_affine(t_img, **affine_kwargs)  #
-            # tensors
-        else:
-            affine_t_to_norm = torch.zeros([2, 3]).to(torch.float32).cuda()  # identity
-            affine_t_to_norm[0, 0] = 1
-            affine_t_to_norm[1, 1] = 1
-        return t_img, affine_t_to_norm
-
-    def _flip_random(self, img, affine_t_to_norm):
-        if np.random.rand() > self.flip_p:
-            img = torch.flip(img, dims=[2])
-            affine_t_to_norm[0, :] *= -1.0
-        return img, affine_t_to_norm
 
     def _generate_mask(self, label):
         label_out, mask = self._filter_label(label)

@@ -103,8 +103,8 @@ def create_empty(config):
     empty = torch.zeros(
         config.dataset.batch_size,
         get_channel_count(config),
-        config.input_sz,
-        config.input_sz,
+        config.input_size,
+        config.input_size,
     )
     return empty.to(torch.float32).cuda()
 
@@ -115,12 +115,12 @@ def create_empty_affine(config):
 
 
 def create_empty_mask(config):
-    empty = torch.zeros(config.dataset.batch_size, config.input_sz, config.input_sz)
+    empty = torch.zeros(config.dataset.batch_size, config.input_size, config.input_size)
     return empty.to(torch.float32).cuda()
 
 
 def get_channel_count(config):
-    if not config.no_sobel:
+    if config.preprocessor.sobelize:
         channel_count = config.in_channels - 1
     else:
         channel_count = config.in_channels

@@ -43,7 +43,9 @@ def _segmentation_get_data(
     num_samples = 0
 
     # upper bound, will be less for last batch
-    samples_per_batch = config.dataset.batch_size * config.input_sz * config.input_sz
+    samples_per_batch = (
+        config.dataset.batch_size * config.input_size * config.input_size
+    )
 
     if verbose > 0:
         print("started _segmentation_get_data %s" % datetime.now())
@@ -80,12 +82,14 @@ def _segmentation_get_data(
 
         assert x_outs[0].shape[1] == config.output_k
         assert (
-            x_outs[0].shape[2] == config.input_sz
-            and x_outs[0].shape[3] == config.input_sz
+            x_outs[0].shape[2] == config.input_size
+            and x_outs[0].shape[3] == config.input_size
         )
 
         # actual batch size
-        actual_samples_curr = flat_targets.shape[0] * config.input_sz * config.input_sz
+        actual_samples_curr = (
+            flat_targets.shape[0] * config.input_size * config.input_size
+        )
         num_samples += actual_samples_curr
 
         # vectorise: collapse from 2D to 1D

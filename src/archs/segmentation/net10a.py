@@ -16,7 +16,7 @@ class SegmentationNet10aTrunk(VGGTrunk):
 
     self.batchnorm_track = config.batchnorm_track
 
-    assert (config.input_sz % 2 == 0)
+    assert (config.input_size % 2 == 0)
 
     self.conv_size = 3
     self.pad = 1
