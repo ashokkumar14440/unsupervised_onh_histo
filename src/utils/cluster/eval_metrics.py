@@ -3,7 +3,6 @@
 import numpy as np
 import torch
 from sklearn import metrics
-from sklearn.utils.linear_assignment_ import linear_assignment
 from scipy.optimize import linear_sum_assignment
 
 
