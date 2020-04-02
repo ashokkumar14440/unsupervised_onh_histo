@@ -47,7 +47,7 @@ class SegmentationNet10aHead(nn.Module):
                 stride=1, dilation=1, padding=1, bias=False),
       nn.Softmax2d()) for _ in range(self.num_sub_heads)])
 
-    self.input_sz = config.input_sz
+    self.input_size = config.input_size
 
   def forward(self, x):
     results = []
