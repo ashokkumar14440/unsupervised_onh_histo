@@ -4,6 +4,7 @@ import numpy as np
 import torch
 from sklearn import metrics
 from sklearn.utils.linear_assignment_ import linear_assignment
+from scipy.optimize import linear_sum_assignment
 
 
 def _original_match(flat_preds, flat_targets, preds_k, targets_k):
@@ -44,11 +45,11 @@ def _hungarian_match(flat_preds, flat_targets, preds_k, targets_k):
       num_correct[c1, c2] = votes
 
   # num_correct is small
-  match = linear_assignment(num_samples - num_correct)
+  row, col = linear_sum_assignment(num_samples - num_correct)
 
   # return as list of tuples, out_c to gt_c
   res = []
-  for out_c, gt_c in match:
+  for out_c, gt_c in zip(row, col):
     res.append((out_c, gt_c))
 
   return res
