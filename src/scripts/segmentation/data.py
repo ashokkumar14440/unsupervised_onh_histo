@@ -20,12 +20,7 @@ from torch.utils import data
 
 from .util import cocostuff_fine_to_coarse
 from .util.cocostuff_fine_to_coarse import generate_fine_to_coarse
-from ...utils.segmentation.render import render
-from ...utils.segmentation.transforms import (
-    pad_and_or_crop,
-    random_affine,
-    custom_greyscale_numpy,
-)
+from src.utils.segmentation.render import render
 
 from src.scripts.segmentation.preprocess import Preprocessor
 
@@ -58,7 +53,7 @@ class _Coco(data.Dataset):
         super(_Coco, self).__init__()
 
         self.split = split
-        self.purpose = purpose
+        self._purpose = purpose
 
         self.root = config.dataset.root
         self._render_folder = config.render_root
@@ -95,7 +90,8 @@ class _Coco(data.Dataset):
         assert img.shape[:2] == label.shape
 
         # PREPROCESS
-        result = self._preprocessor.process(img, label)
+        self._preprocessor.purpose = self._purpose  # ! probable race condition
+        result = self._preprocessor.apply(img, label)
         img = result["image"]
         label = result["label"]
         affine_inverse = result["affine_inverse"]
@@ -123,7 +119,8 @@ class _Coco(data.Dataset):
         assert img.shape[:2] == label.shape
 
         # PREPROCESS
-        result = self._preprocessor.process(img, label)
+        self._preprocessor.purpose = self._purpose  # ! probable race condition
+        result = self._preprocessor.apply(img, label)
         img = result["image"]
         label = result["label"]
 
@@ -141,7 +138,8 @@ class _Coco(data.Dataset):
         assert img.shape[:2] == label.shape
 
         # PREPROCESS
-        result = self._preprocessor.process(img, label)
+        self._preprocessor.purpose = self._purpose  # ! probable race condition
+        result = self._preprocessor.apply(img, label)
         img = result["image"]
         label = result["label"]
 
@@ -162,12 +160,12 @@ class _Coco(data.Dataset):
         image_id = self.files[index]
         image, label = self._load_data(image_id)
 
-        if self.purpose == "train" and self.single_mode:
+        if self._purpose == "train" and self.single_mode:
             return self._prepare_train_single(index, image, label)
-        elif self.purpose == "train":
+        elif self._purpose == "train":
             return self._prepare_train(index, image, label)
         else:
-            assert self.purpose == "test"
+            assert self._purpose == "test"
             return self._prepare_test(index, image, label)
 
     def __len__(self):

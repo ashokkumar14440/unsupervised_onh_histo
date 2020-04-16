@@ -15,9 +15,7 @@
       "jitter_hue": 0.125
     },
     "transformations": {
-      "use_random_stretch": false,
-      "stretch_range": [0.6, 1.4],
-      "flip_probability": 0.5,
+      "flip_horizontal_probability": 0.5,
       "use_random_affine": true,
       "rotation_range": [-30.0, 30.0],
       "shear_range": [-10.0, 10.0],

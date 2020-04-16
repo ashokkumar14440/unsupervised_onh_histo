@@ -4,6 +4,7 @@ from types import SimpleNamespace
 from inc.config_snake.config import ConfigFile, ConfigDict
 from src.utils.segmentation.data import build_dataloaders
 from src.utils.segmentation.general import set_segmentation_input_channels
+from src.scripts.segmentation.preprocess import *
 
 from model import Model
 
@@ -48,7 +49,10 @@ def interface():
 
 
 def train(config):
-    head_A, map_assign, map_test = build_dataloaders(config)
+    preparer = Preparer(config)
+    transformation = Transformation(config)
+    preprocessor = Preprocessor(config, preparer, transformation)
+    head_A, map_assign, map_test = build_dataloaders(config, preprocessor)
     dataloaders = {
         "A": head_A,
         "B": head_A,

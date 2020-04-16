@@ -19,72 +19,66 @@ def custom_greyscale_numpy(img, include_rgb=True):
     return img
 
 
-def pad_if_too_small(data, sz):
-    reshape = len(data.shape) == 2
-    if reshape:
-        h, w = data.shape
-        data = data.reshape((h, w, 1))
-
-    h, w, c = data.shape
-
-    if not (h >= sz and w >= sz):
-        # img is smaller than sz
-        # we are missing by at least 1 pixel in at least 1 edge
-        new_h, new_w = max(h, sz), max(w, sz)
-        new_data = np.zeros([new_h, new_w, c], dtype=data.dtype)
-
-        # will get correct centre, 5 -> 2
-        centre_h, centre_w = int(new_h / 2.0), int(new_w / 2.0)
-        h_start, w_start = centre_h - int(h / 2.0), centre_w - int(w / 2.0)
-
-        new_data[h_start : (h_start + h), w_start : (w_start + w), :] = data
-    else:
-        new_data = data
-        new_h, new_w = h, w
-
-    if reshape:
-        new_data = new_data.reshape((new_h, new_w))
-
-    return new_data
+def get_random_start_subscript(shape, required_shape):
+    shape_change = _calculate_crop_change(shape, required_shape)
+    return np.array([np.random.randint(low=c, high=1) for c in shape_change])
 
 
-def pad_and_or_crop(orig_data, sz, mode=None, coords=None):
-    data = pad_if_too_small(orig_data, sz)
+def get_center_start_subscript(shape, required_shape):
+    shape_change = _calculate_crop_change(shape, required_shape)
+    return shape_change // 2
 
-    reshape = len(data.shape) == 2
-    if reshape:
-        h, w = data.shape
-        data = data.reshape((h, w, 1))
 
-    h, w, c = data.shape
-    if mode == "centre":
-        h_c = int(h / 2.0)
-        w_c = int(w / 2.0)
-    elif mode == "fixed":
-        assert coords is not None
-        h_c, w_c = coords
-    elif mode == "random":
-        h_c_min = int(sz / 2.0)
-        w_c_min = int(sz / 2.0)
+def reshape_by_pad_crop(data, required_shape, crop_start_subscript=None):
+    """
+    Padding occurs along a dimension if the data array is smaller than the
+    required shape. The start and end of a dimension are padded equally, with
+    the end receiving one extra for odd differences. Cropping occurs if the data
+    is larger than required. The start subscript depicts the starting point of
+    the cropped data in the input data.
+    """
+    assert data.ndim == len(required_shape)
+    out = pad(data, required_shape)
+    if crop_start_subscript is None:
+        crop_start_subscript = get_center_start_subscript(data.shape, required_shape)
+    out = crop(out, required_shape, crop_start_subscript)
+    return out
 
-        if sz % 2 == 1:
-            h_c_max = h - 1 - int(sz / 2.0)
-            w_c_max = w - 1 - int(sz / 2.0)
-        else:
-            h_c_max = h - int(sz / 2.0)
-            w_c_max = w - int(sz / 2.0)
 
-        h_c = np.random.randint(low=h_c_min, high=(h_c_max + 1))
-        w_c = np.random.randint(low=w_c_min, high=(w_c_max + 1))
+def pad(data, required_shape):
+    change = _calculate_pad_change(data.shape, required_shape)
+    pre_change = change // 2
+    post_change = change - pre_change
+    padding = list(zip(pre_change, post_change))  # post pad only
+    return np.pad(data, padding)
 
-    h_start = h_c - int(sz / 2.0)
-    w_start = w_c - int(sz / 2.0)
-    data = data[h_start : (h_start + sz), w_start : (w_start + sz), :]
 
-    if reshape:
-        data = data.reshape((sz, sz))
+def crop(data, required_shape, start_subscript):
+    change = _calculate_crop_change(data.shape, required_shape)
+    pre_change = np.array(list(start_subscript))
+    post_change = change - pre_change
+    start = -pre_change
+    end = np.array(list(data.shape)) + post_change
+    sl = tuple(slice(s, e) for s, e in zip(start, end))
+    return data[sl]
 
-    return data, (h_c, w_c)
+
+def _calculate_pad_change(shape, required_shape):
+    return _calculate_shape_change(shape, required_shape, limit_fn=lambda x: max(0, x))
+
+
+def _calculate_crop_change(shape, required_shape):
+    return _calculate_shape_change(shape, required_shape, limit_fn=lambda x: min(0, x))
+
+
+def _calculate_shape_change(shape, required_shape, limit_fn=None):
+    """Positive means pad, negative means crop."""
+    assert len(shape) == len(required_shape)
+    shape = np.array(list(shape))
+    req = np.array(list(required_shape))
+    change = req - shape
+    change = np.array([limit_fn(c) for c in change])
+    return change
 
 
 def random_affine(
@@ -207,3 +201,20 @@ def random_translation(img, half_side_min, half_side_max):
     assert img.shape[1:] == (h, w)
 
     return img
+
+
+if __name__ == "__main__":
+    data = np.arange(24).reshape((4, 6))
+    req = (2, 2)
+    start = get_center_start_subscript(data.shape, req)
+    print(reshape_by_pad_crop(data, req, start))
+    start = get_random_start_subscript(data.shape, req)
+    print(reshape_by_pad_crop(data, req, start))
+    start = get_random_start_subscript(data.shape, req)
+    print(reshape_by_pad_crop(data, req, start))
+    start = get_random_start_subscript(data.shape, req)
+    print(reshape_by_pad_crop(data, req, start))
+    start = get_random_start_subscript(data.shape, req)
+    print(reshape_by_pad_crop(data, req, start))
+    start = get_random_start_subscript(data.shape, req)
+    print(reshape_by_pad_crop(data, req, start))
