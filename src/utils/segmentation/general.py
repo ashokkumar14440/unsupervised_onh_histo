@@ -16,4 +16,8 @@ def set_segmentation_input_channels(config):
                 config.in_channels += 2  # rgbir + sobel
         config.using_IR = True
     else:
-        raise NotImplementedError
+        # HACK
+        if not config.include_rgb:
+            config.in_channels = 1
+        else:
+            assert False

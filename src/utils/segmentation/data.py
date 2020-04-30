@@ -1,15 +1,17 @@
-from src.scripts.segmentation.preprocess import Preprocessor
-import sys
-from datetime import datetime
-
 import torch
 from torch.utils.data import ConcatDataset
 
 from src.scripts.segmentation import data
+from src.scripts.segmentation.general_data import OnhDataset
 
 
 def build_dataloaders(config, preprocessor):
-    dataset_class = data.__dict__[config.dataset.name]
+    name = config.dataset.name
+    if name in data.__dict__.keys():
+        dataset_class = data.__dict__[config.dataset.name]
+    else:
+        dataset_class = OnhDataset
+
     preprocessor.purpose = "train"
     dataloaders = _create_dataloaders(
         config, dataset_class, preprocessor
@@ -73,9 +75,8 @@ def _create_dataset(config, dataset_class, preprocessor):
             config=config,
             split=partition,
             purpose=preprocessor.purpose,
-            preload=False,
             preprocessor=preprocessor,
         )
-        for partition in config.dataset.partitions.train
+        for partition in config.dataset.partitions.train.values()
     ]
     return ConcatDataset(images)

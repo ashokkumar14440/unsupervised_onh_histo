@@ -13,9 +13,6 @@ import cv2
 import numpy as np
 import scipy.io as sio
 import torch
-from torch.utils.data.dataset import ConcatDataset
-import torchvision.transforms as tvt
-from PIL import Image
 from torch.utils import data
 
 from .util import cocostuff_fine_to_coarse

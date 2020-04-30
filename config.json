@@ -1,14 +1,14 @@
 {
   "segmentation": {
     "head_order": ["A", "B"],
-    "model_ind": 555,
+    "model_ind": 777,
     "arch": "SegmentationNet10aTwoHead",
     "opt": "Adam",
     "mode": "IID",
     "preprocessor": {
       "prescale_all": true,
       "prescale_factor": 0.33,
-      "sobelize": true,
+      "sobelize": false,
       "jitter_brightness": 0.4,
       "jitter_contrast": 0.4,
       "jitter_saturation": 0.4,
@@ -22,14 +22,15 @@
       "scale_range": [0.8, 1.2]
     },
     "dataset": {
-      "name": "Coco164kCuratedFew",
-      "root": "./datasets/cocostuff_small",
+      "name": "OTHER",
+      "name_bak": "Coco164kCuratedFew",
+      "root": "./datasets/test",
       "num_dataloaders": 1,
       "batch_size": 120,
       "partitions": {
-        "train": ["train2017", "val2017"],
-        "map_assign": ["train2017", "val2017"],
-        "map_test": ["train2017", "val2017"]
+        "train": { "train": "train2017", "test": "val2017" },
+        "map_assign": { "train": "train2017", "test": "val2017" },
+        "map_test": { "train": "train2017", "test": "val2017" }
       },
       "parameters": {
         "fine_to_coarse_dict": "./datasets/cocostuff/fine_to_coarse_dict",
@@ -38,6 +39,12 @@
         "include_animal_things": false
       }
     },
+    "optimizer": {
+      "learning_rate": 0.0001,
+      "schedule": [],
+      "multiplier": 0.1
+    },
+    "render": true,
     "render_root": "./out/renders",
     "out_root": "./out",
     "coco_164k_curated_version": 6,
@@ -45,9 +52,6 @@
     "output_k_A": 15,
     "output_k_B": 3,
     "lambs": { "A": 1.0, "B": 1.5 },
-    "lr": 0.0001,
-    "lr_schedule": [],
-    "lr_mult": 0.1,
     "use_uncollapsed_loss": true,
     "mask_input": false,
     "num_epochs": 5,
@@ -56,7 +60,8 @@
     "num_sub_heads": 1,
     "test_code": false,
     "batchnorm_track": true,
-    "include_rgb": true,
+    "include_rgb": false,
+    "using_IR": false,
     "input_size": 128,
     "half_T_side_dense": 10,
     "half_T_side_sparse_min": 0,

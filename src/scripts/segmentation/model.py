@@ -6,7 +6,6 @@ import torch.nn
 import numpy as np
 
 import src.archs as archs
-from src.utils.cluster.general import get_opt, update_lr
 from src.utils.segmentation.IID_losses import (
     IID_segmentation_loss,
     IID_segmentation_loss_uncollapsed,
@@ -16,7 +15,6 @@ from utils import (
     BatchStatistics,
     EpochStatistics,
     transfer_images,
-    sobelize,
     process,
     compute_losses,
     Canvas,
@@ -32,7 +30,9 @@ class Model:
         net.cuda()
         net = torch.nn.DataParallel(net)
         net.train()
-        optimizer = get_opt(config.opt)(net.module.parameters(), lr=config.lr)
+        optimizer = torch.optim.Adam(
+            net.module.parameters(), lr=config.optimizer.learning_rate
+        )
         stats = EpochStatistics()
         canvas = Canvas()
         num_epochs = config.num_epochs
@@ -78,10 +78,8 @@ class Model:
             print("Starting epoch: {epoch:4d}".format(epoch=epoch_number + 1))
 
             # PREPARE
-            if epoch_number in self._config.lr_schedule:
-                self._optimizer = update_lr(
-                    self._optimizer, lr_mult=self._config.lr_mult
-                )
+            if epoch_number in self._config.optimizer.schedule:
+                self._update_learning_rate(lr_mult=self._config.optimizer.multiplier)
 
             # PROCESS
             batch_stats = self._process_epoch()
@@ -161,8 +159,6 @@ class Model:
     ):
         self._net.module.zero_grad()
         images = transfer_images(data, self._config)
-        if self._config.preprocessor.sobelize:
-            images = sobelize(images, self._config)
         outs = process_fn(images)
         losses = compute_losses(self._config, self._loss_fn, lamb, images, outs)
         loss = losses[0].item()
@@ -193,6 +189,10 @@ class Model:
 
         losses[0].backward()
         self._optimizer.step()
+
+    def _update_learning_rate(self, lr_mult=0.1):
+        for param_group in self._optimizer.param_groups:
+            param_group["lr"] *= lr_mult
 
     @property
     def heads(self):

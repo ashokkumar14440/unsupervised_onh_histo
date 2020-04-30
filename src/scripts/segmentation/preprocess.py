@@ -1,8 +1,6 @@
 import cv2
 import numpy as np
-import scipy.io as sio
 import torch
-from torch.utils.data.dataset import ConcatDataset
 import torchvision.transforms as tvt
 from PIL import Image
 from src.utils.segmentation.transforms import (
@@ -12,6 +10,7 @@ from src.utils.segmentation.transforms import (
     random_affine,
     custom_greyscale_numpy,
 )
+from src.utils.cluster.transforms import sobel_process
 
 
 class Preparer:
@@ -25,11 +24,20 @@ class Preparer:
         self._prescale_factor = config.preprocessor.prescale_factor
         assert self._prescale_factor < 1.0
 
-    def prepare(self, image, image_type):
-        type_data = self._IMAGE_TYPE_DATA[image_type]
+    def apply_to_image(self, image):
+        type_data = self._IMAGE_TYPE_DATA["data"]
+        return self._apply(image, type_data)
+
+    def apply_to_labels(self, image):
+        type_data = self._IMAGE_TYPE_DATA["label"]
+        return self._apply(image, type_data)
+
+    def _apply(self, image, type_data):
         image = image.astype(type_data["dtype"])
         if self._prescale:
             image = self._scale(image, type_data)
+        if image.ndim == 2:
+            image = image[..., np.newaxis]
         return image
 
     def _scale(self, image, type_data):
@@ -47,10 +55,11 @@ class Preprocessor:
         self.do_render = False
 
         self._purpose = None
+        self._preparer = preparer
         self._transformation = transformation
 
         self._include_rgb = config.include_rgb
-        self._sobelize = config.preprocessor.sobelize
+        self._do_sobelize = config.preprocessor.sobelize
         self._input_shape = [config.input_size, config.input_size]
 
         self._jitter_tf = tvt.ColorJitter(
@@ -71,25 +80,30 @@ class Preprocessor:
 
     def apply(self, image, label):
         assert self._purpose is not None
-        img = None
-        lbl = None
+        img = self._preparer.apply_to_image(image)
+        lbl = self._preparer.apply_to_labels(label)
         t_img = None
         affine_inverse = None
         if self._purpose == "train":
-            img, lbl = self._pad_and_crop_random(image, label)
+            img, lbl = self._pad_and_crop_random(img, lbl)
             t_img = np.copy(img)
             t_img, affine_inverse = self._preprocess_transformed(t_img)
         elif self._purpose == "train_single":
-            img, lbl = self._pad_and_crop_random(image, label)
+            img, lbl = self._pad_and_crop_random(img, lbl)
             img, _ = self._preprocess_transformed(img)
         elif self._purpose == "test":
-            img, lbl = self._pad_and_crop_center(image, label)
+            img, lbl = self._pad_and_crop_center(img, lbl)
         else:
             assert False
         assert img is not None
         assert lbl is not None
 
         img = self._preprocess(img)
+        # lbl = self._prepare_torch(lbl)
+        lbl = lbl.squeeze()
+        if self._do_sobelize:
+            img = self._sobelize(img)
+            t_img = self._sobelize(t_img)
         return {
             "image": img,
             "label": lbl,
@@ -98,7 +112,7 @@ class Preprocessor:
         }
 
     def _preprocess(self, img):
-        img = self._handle_sobel(img)
+        img = self._prepare_for_sobel(img)
         img = self._rescale_values(img)
         img = self._prepare_torch(img)
         return img
@@ -115,8 +129,8 @@ class Preprocessor:
     def _prepare_torch(self, img):
         return torch.from_numpy(img).permute(2, 0, 1).cuda()
 
-    def _handle_sobel(self, img):
-        if self._sobelize:
+    def _prepare_for_sobel(self, img):
+        if self._do_sobelize:
             img = custom_greyscale_numpy(img, include_rgb=self._include_rgb)
         return img
 
@@ -125,7 +139,6 @@ class Preprocessor:
         start_subscript = get_random_start_subscript(img.shape, required_shape)
         img = reshape_by_pad_crop(img, required_shape, start_subscript)
         required_shape = self._get_required_shape(label)
-        start_subscript = start_subscript[0:2]
         label = reshape_by_pad_crop(label, required_shape, start_subscript)
         return img, label
 
@@ -134,7 +147,6 @@ class Preprocessor:
         start_subscript = get_center_start_subscript(img.shape, required_shape)
         img = reshape_by_pad_crop(img, required_shape, start_subscript)
         required_shape = self._get_required_shape(label)
-        start_subscript = start_subscript[0:2]
         label = reshape_by_pad_crop(label, required_shape, start_subscript)
         return img, label
 
@@ -143,10 +155,22 @@ class Preprocessor:
         return required_shape
 
     def _jitter(self, img):
+        was_gray = False
+        if img.shape[-1] == 1:
+            was_gray = True
+            img = img.squeeze()
         img = Image.fromarray(img.astype(np.uint8))
         img = self._jitter_tf(img)
         img = np.array(img)
+        if was_gray:
+            img = img[..., np.newaxis]
         return img
+
+    def _sobelize(self, img):
+        if img is None:
+            return img
+        else:
+            return sobel_process(img)
 
 
 class Transformation:

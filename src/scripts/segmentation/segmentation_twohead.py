@@ -23,6 +23,7 @@ def interface():
     config.dataset = ConfigDict(config, config.dataset)
     config.preprocessor = ConfigDict(config, config.preprocessor)
     config.transformations = ConfigDict(config, config.transformations)
+    config.optimizer = ConfigDict(config, config.optimizer)
 
     assert config.mode == "IID"
     assert "TwoHead" in config.arch
@@ -66,6 +67,6 @@ def train(config):
 import shutil
 
 if __name__ == "__main__":
-    out = PurePath("out/555")
+    out = PurePath("out")
     shutil.rmtree(out, ignore_errors=True)
     interface()

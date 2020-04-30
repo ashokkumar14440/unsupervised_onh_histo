@@ -74,8 +74,8 @@ def _segmentation_get_data(
         imgs, flat_targets, mask = batch
         imgs = imgs.cuda()
 
-        if sobel:
-            imgs = sobel_process(imgs, config.include_rgb, using_IR=using_IR)
+        # if sobel:
+        #    imgs = sobel_process(imgs, config.include_rgb, using_IR=using_IR)
 
         with torch.no_grad():
             x_outs = net(imgs)
