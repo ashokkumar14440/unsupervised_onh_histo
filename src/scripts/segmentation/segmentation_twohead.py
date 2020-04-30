@@ -6,7 +6,7 @@ from src.utils.segmentation.data import build_dataloaders
 from src.utils.segmentation.general import set_segmentation_input_channels
 from src.scripts.segmentation.preprocess import *
 
-from model import Model
+from src.scripts.segmentation.model import Model
 
 """
   Fully unsupervised clustering for segmentation ("IIC" = "IID").

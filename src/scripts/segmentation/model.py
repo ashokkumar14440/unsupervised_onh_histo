@@ -11,7 +11,7 @@ from src.utils.segmentation.IID_losses import (
     IID_segmentation_loss_uncollapsed,
 )
 from src.utils.segmentation.segmentation_eval import segmentation_eval
-from utils import (
+from src.scripts.segmentation.utils import (
     BatchStatistics,
     EpochStatistics,
     transfer_images,
