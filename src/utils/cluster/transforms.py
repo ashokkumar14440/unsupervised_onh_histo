@@ -44,7 +44,34 @@ def custom_cutout(min_box=None, max_box=None):
   return _inner
 
 
-def sobel_process(imgs, include_rgb, using_IR=False):
+def sobel_process(image: torch.Tensor):
+  gray = image[-1, ...].unsqueeze(0).unsqueeze(0)
+  other = image[:-1, ...]
+  sobel = make_sobel(gray)
+  return torch.cat([other, sobel], dim=0)
+
+
+
+def make_sobel(image: torch.Tensor):
+  HORIZONTAL = np.array([[1, 0, -1], [2, 0, -2], [1, 0, -1]])
+  CONV_H = generate_convolution(HORIZONTAL)
+  dx = CONV_H(image).data
+  VERTICAL = np.array([[1, 2, 1], [0, 0, 0], [-1, -2, -1]])
+  CONV_V = generate_convolution(VERTICAL)
+  dy = CONV_V(image).data
+  return torch.cat([dx, dy], dim=1).squeeze()
+
+
+def generate_convolution(sobel_filter):
+  filt = torch.from_numpy(sobel_filter)
+  filt = filt.cuda().float()
+  filt = filt.unsqueeze(0).unsqueeze(0)
+  conv = nn.Conv2d(1, 1, kernel_size=3, padding=1, bias=False)
+  conv.weight = nn.Parameter(filt, requires_grad=False)
+  return conv
+
+
+def sobel_process_bak(imgs, include_rgb, using_IR=False):
   bn, c, h, w = imgs.size()
 
   rgb_imgs = None

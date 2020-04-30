@@ -16,7 +16,7 @@ class SegmentationNet10aTrunk(VGGTrunk):
 
     self.batchnorm_track = config.batchnorm_track
 
-    assert (config.input_sz % 2 == 0)
+    assert (config.input_size % 2 == 0)
 
     self.conv_size = 3
     self.pad = 1
@@ -47,13 +47,13 @@ class SegmentationNet10aHead(nn.Module):
                 stride=1, dilation=1, padding=1, bias=False),
       nn.Softmax2d()) for _ in range(self.num_sub_heads)])
 
-    self.input_sz = config.input_sz
+    self.input_size = config.input_size
 
   def forward(self, x):
     results = []
     for i in range(self.num_sub_heads):
       x_i = self.heads[i](x)
-      x_i = F.interpolate(x_i, size=self.input_sz, mode="bilinear")
+      x_i = F.interpolate(x_i, size=self.input_size, mode="bilinear", align_corners=True)
       results.append(x_i)
 
     return results

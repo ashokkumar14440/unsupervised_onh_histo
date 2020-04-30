@@ -15,11 +15,8 @@ def segmentation_eval(
     sobel,
     using_IR=False,
     verbose=0,
-    return_only=False,
 ):
-    torch.cuda.empty_cache()
     net.eval()
-
     stats_dict = cluster_subheads_eval(
         config,
         net,
@@ -30,22 +27,8 @@ def segmentation_eval(
         get_data_fn=_segmentation_get_data,
         verbose=verbose,
     )
-
     net.train()
-
-    acc = stats_dict["best"]
-    is_best = (len(config.epoch_acc) > 0) and (acc > max(config.epoch_acc))
-
-    torch.cuda.empty_cache()
-
-    if not return_only:
-        config.epoch_stats.append(stats_dict)
-        config.epoch_acc.append(acc)
-        config.epoch_avg_subhead_acc.append(stats_dict["avg"])
-
-        return is_best
-    else:
-        return stats_dict
+    return stats_dict
 
 
 def _segmentation_get_data(
@@ -60,7 +43,9 @@ def _segmentation_get_data(
     num_samples = 0
 
     # upper bound, will be less for last batch
-    samples_per_batch = config.batch_sz * config.input_sz * config.input_sz
+    samples_per_batch = (
+        config.dataset.batch_size * config.input_size * config.input_size
+    )
 
     if verbose > 0:
         print("started _segmentation_get_data %s" % datetime.now())
@@ -74,7 +59,7 @@ def _segmentation_get_data(
     flat_targets_all = torch.zeros(
         (num_batches * samples_per_batch), dtype=torch.uint8
     ).cuda()
-    mask_all = torch.zeros((num_batches * samples_per_batch), dtype=torch.uint8).cuda()
+    mask_all = torch.zeros((num_batches * samples_per_batch), dtype=torch.bool).cuda()
 
     batch_start = None
     all_start = None
@@ -85,23 +70,26 @@ def _segmentation_get_data(
 
     for b_i, batch in enumerate(dataloader):
 
+        # TODO mask should be of type bool, fix in dataloaders
         imgs, flat_targets, mask = batch
         imgs = imgs.cuda()
 
-        if sobel:
-            imgs = sobel_process(imgs, config.include_rgb, using_IR=using_IR)
+        # if sobel:
+        #    imgs = sobel_process(imgs, config.include_rgb, using_IR=using_IR)
 
         with torch.no_grad():
             x_outs = net(imgs)
 
         assert x_outs[0].shape[1] == config.output_k
         assert (
-            x_outs[0].shape[2] == config.input_sz
-            and x_outs[0].shape[3] == config.input_sz
+            x_outs[0].shape[2] == config.input_size
+            and x_outs[0].shape[3] == config.input_size
         )
 
         # actual batch size
-        actual_samples_curr = flat_targets.shape[0] * config.input_sz * config.input_sz
+        actual_samples_curr = (
+            flat_targets.shape[0] * config.input_size * config.input_size
+        )
         num_samples += actual_samples_curr
 
         # vectorise: collapse from 2D to 1D
