@@ -1,10 +1,13 @@
 {
   "segmentation": {
-    "head_order": ["A", "B"],
-    "model_ind": 777,
-    "arch": "SegmentationNet10aTwoHead",
-    "opt": "Adam",
-    "mode": "IID",
+    "architecture": {
+      "name": "SegmentationNet10aTwoHead",
+      "num_classes": 3,
+      "head_A_num_classes": 15,
+      "head_B_num_classes": 3,
+      "num_sub_heads": 1,
+      "batchnorm_track": true
+    },
     "preprocessor": {
       "prescale_all": true,
       "prescale_factor": 0.33,
@@ -21,51 +24,61 @@
       "shear_range": [-10.0, 10.0],
       "scale_range": [0.8, 1.2]
     },
+    "training": {
+      "batch_size": 120,
+      "shuffle": true,
+      "num_dataloaders": 1,
+      "num_epochs": 5,
+      "validation_mode": "IID",
+      "head_order": ["A", "B"],
+      "loss": {
+        "lambs": { "A": 1.0, "B": 1.5 },
+        "use_uncollapsed": true,
+        "half_T_side_dense": 10,
+        "half_T_side_sparse_min": 0,
+        "half_T_side_sparse_max": 0
+      }
+    },
     "dataset": {
       "name": "OTHER",
+      "id": 777,
       "name_bak": "Coco164kCuratedFew",
       "root": "./datasets/test",
-      "num_dataloaders": 1,
-      "batch_size": 120,
       "partitions": {
         "train": { "train": "train2017", "test": "val2017" },
         "map_assign": { "train": "train2017", "test": "val2017" },
         "map_test": { "train": "train2017", "test": "val2017" }
       },
       "parameters": {
+        "coco_164k_curated_version": 6,
         "fine_to_coarse_dict": "./datasets/cocostuff/fine_to_coarse_dict",
         "use_coarse_labels": true,
         "include_things_labels": false,
-        "include_animal_things": false
+        "include_animal_things": false,
+        "include_rgb": false,
+        "using_IR": false,
+        "mask_input": false,
+        "input_size": 128
       }
     },
     "optimizer": {
+      "name": "Adam",
       "learning_rate": 0.0001,
       "schedule": [],
       "multiplier": 0.1
     },
-    "render": true,
-    "render_root": "./out/renders",
-    "out_root": "./out",
-    "coco_164k_curated_version": 6,
-    "gt_k": 3,
-    "output_k_A": 15,
-    "output_k_B": 3,
-    "lambs": { "A": 1.0, "B": 1.5 },
-    "use_uncollapsed_loss": true,
-    "mask_input": false,
-    "num_epochs": 5,
-    "batch_print_freq": 5,
-    "save_freq": 1,
-    "num_sub_heads": 1,
-    "test_code": false,
-    "batchnorm_track": true,
-    "include_rgb": false,
-    "using_IR": false,
-    "input_size": 128,
-    "half_T_side_dense": 10,
-    "half_T_side_sparse_min": 0,
-    "half_T_side_sparse_max": 0,
-    "plot_name": "plots.png"
+    "output": {
+      "batch_print_freq": 5,
+      "save_freq": 1,
+      "rendering": {
+        "output_subfolder": "renders",
+        "enabled": true
+      },
+      "root": "./out",
+      "plot_name": "plots.png"
+    },
+    "debug": {
+      "enabled": false
+    }
   }
 }

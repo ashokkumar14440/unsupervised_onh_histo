@@ -117,17 +117,17 @@ def cluster_subheads_eval(
     )
 
     best_sub_head_eval = np.argmax(train_accs)
-    if (config.num_sub_heads > 1) and (use_sub_head is not None):
+    if (config.architecture.num_sub_heads > 1) and (use_sub_head is not None):
         best_sub_head = use_sub_head
     else:
         best_sub_head = best_sub_head_eval
 
-    if config.mode == "IID":
+    if config.training.validation_mode == "IID":
         assert (
             config.dataset.partitions.map_assign == config.dataset.partitions.map_test
         )
         test_accs = train_accs
-    elif config.mode == "IID+":
+    elif config.training.validation_mode == "IID+":
         flat_predss_all, flat_targets_all, = get_data_fn(
             config,
             net,
@@ -211,9 +211,9 @@ def _get_assignment_data_matches(
     all_matches = []
     all_accs = None
     if not just_matches:
-        all_accs = np.zeros(config.num_sub_heads, dtype=np.float32)
+        all_accs = np.zeros(config.architecture.num_sub_heads, dtype=np.float32)
 
-    for i in range(config.num_sub_heads):
+    for i in range(config.architecture.num_sub_heads):
         if verbose:
             print(
                 "starting head %d with eval mode %s, %s"
@@ -226,7 +226,7 @@ def _get_assignment_data_matches(
                 flat_predss_all[i],
                 flat_targets_all,
                 preds_k=config.output_k,
-                targets_k=config.gt_k,
+                targets_k=config.architecture.num_classes,
             )
         elif config.eval_mode == "orig":
             match = _original_match(
@@ -264,7 +264,12 @@ def _get_assignment_data_matches(
                 print("reordered %s" % (datetime.now()))
                 sys.stdout.flush()
 
-            acc = _acc(reordered_preds, flat_targets_all, config.gt_k, verbose)
+            acc = _acc(
+                reordered_preds,
+                flat_targets_all,
+                config.architecture.num_classes,
+                verbose,
+            )
             all_accs[i] = acc
 
     if just_matches:

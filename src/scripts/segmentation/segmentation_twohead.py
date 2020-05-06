@@ -20,31 +20,30 @@ def interface():
     config = config_file.segmentation
     config = config.to_json()
     config = SimpleNamespace(**config)
-    config.dataset = ConfigDict(config, config.dataset)
-    config.preprocessor = ConfigDict(config, config.preprocessor)
-    config.transformations = ConfigDict(config, config.transformations)
-    config.optimizer = ConfigDict(config, config.optimizer)
+    for k, v in config.__dict__.items():
+        config.__dict__[k] = ConfigDict(config, v)
 
-    assert config.mode == "IID"
-    assert "TwoHead" in config.arch
-    assert config.output_k_A >= config.gt_k
-    assert config.output_k_B == config.gt_k
+    assert config.training.validation_mode == "IID"
+    assert "TwoHead" in config.architecture.name
+    assert config.architecture.head_A_num_classes >= config.architecture.num_classes
+    assert config.architecture.head_B_num_classes == config.architecture.num_classes
 
     if "last_epoch" not in config.__dict__:
         config.last_epoch = 0
-    config.out_dir = str(Path(config.out_root).resolve() / str(config.model_ind))
+
+    config.out_dir = str(Path(config.output.root).resolve() / str(config.dataset.id))
+    out_dir = Path(config.out_dir).resolve()
+    if not (out_dir.is_dir() and out_dir.exists()):
+        out_dir.mkdir(parents=True, exist_ok=True)
+
     config.dataloader_batch_size = int(
-        config.dataset.batch_size / config.dataset.num_dataloaders
+        config.training.batch_size / config.training.num_dataloaders
     )
-    config.output_k = config.output_k_B  # for eval code
+    config.output_k = config.architecture.head_B_num_classes  # for eval code
     config.eval_mode = "hung"
     # TODO better mechanism for identifying number of channels in data
     # TODO more robust transform into desired number of channels
     set_segmentation_input_channels(config)
-
-    out_dir = Path(config.out_dir).resolve()
-    if not (out_dir.is_dir() and out_dir.exists()):
-        out_dir.mkdir(parents=True, exist_ok=True)
 
     train(config)
 

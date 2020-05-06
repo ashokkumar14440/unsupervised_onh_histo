@@ -1,4 +1,6 @@
 def set_segmentation_input_channels(config):
+    # TODO this entire function is nonsense. The input channels should be
+    # identifiable from the data at the point of use.
     if "Coco" in config.dataset.name:
         if not config.include_rgb:
             config.in_channels = 2  # just sobel
@@ -17,7 +19,7 @@ def set_segmentation_input_channels(config):
         config.using_IR = True
     else:
         # HACK
-        if not config.include_rgb:
+        if not config.dataset.parameters.include_rgb:
             config.in_channels = 1
         else:
             assert False

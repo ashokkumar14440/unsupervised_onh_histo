@@ -40,8 +40,8 @@ def _create_dataloaders(config, dataset_class, preprocessor):
     # unlike in clustering, each dataloader here returns pairs of images - we
     # need the matrix relation between them
     dataloaders = []
-    do_shuffle = config.dataset.num_dataloaders == 1
-    count = config.dataset.num_dataloaders
+    do_shuffle = config.training.shuffle
+    count = config.training.num_dataloaders
     for d_i in range(count):
         print("Creating dataloader {:d}/{:d}".format(d_i + 1, count))
         train_dataloader = torch.utils.data.DataLoader(
@@ -62,7 +62,7 @@ def _create_dataloaders(config, dataset_class, preprocessor):
 def _create_mapping_loader(config, dataset_class, partitions, preprocessor):
     return torch.utils.data.DataLoader(
         _create_dataset(config, dataset_class, preprocessor),
-        batch_size=config.dataset.batch_size,
+        batch_size=config.training.batch_size,
         shuffle=False,
         num_workers=0,
         drop_last=False,

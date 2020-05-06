@@ -26,7 +26,7 @@ class Model:
     def __init__(self, config, dataloaders: Dict[str, Any]):
         # INITIALIZE
         state_files = StateFiles(config)
-        net = archs.__dict__[config.arch](config)  # type: ignore
+        net = archs.__dict__[config.architecture.name](config)  # type: ignore
         net.cuda()
         net = torch.nn.DataParallel(net)
         net.train()
@@ -35,7 +35,7 @@ class Model:
         )
         stats = EpochStatistics()
         canvas = Canvas()
-        num_epochs = config.num_epochs
+        num_epochs = config.training.num_epochs
         config.starting_epoch = 0
 
         # IF RESTART...
@@ -49,16 +49,16 @@ class Model:
 
         # GET LOSS FN
         # TODO put in function
-        if not config.use_uncollapsed_loss:
+        if not config.training.loss.use_uncollapsed:
             loss_fn = IID_segmentation_loss
         else:
             loss_fn = IID_segmentation_loss_uncollapsed
 
         # PREPARE HEAD, LAMB, DATALOADERS
-        head_order = [h for h in config.head_order]
+        head_order = [h for h in config.training.head_order]
         required = [h for h in ["A", "B"]]
         assert set(required) == set(head_order)
-        lambs = config.lambs
+        lambs = config.training.loss.lambs
 
         self._config = config
         self._heads = head_order
@@ -74,7 +74,9 @@ class Model:
 
     def train(self):
         epoch_stats = EpochStatistics()
-        for epoch_number in range(self._config.starting_epoch, self._config.num_epochs):
+        for epoch_number in range(
+            self._config.starting_epoch, self._config.training.num_epochs
+        ):
             print("Starting epoch: {epoch:4d}".format(epoch=epoch_number + 1))
 
             # PREPARE
@@ -91,7 +93,7 @@ class Model:
                 mapping_assignment_dataloader=self._dataloaders["map_assign"],
                 mapping_test_dataloader=self._dataloaders["map_test"],
                 sobel=(self._config.preprocessor.sobelize),
-                using_IR=self._config.using_IR,
+                using_IR=self._config.dataset.parameters.using_IR,
             )
             if "acc" in epoch_stats:
                 is_best = eval_stats["best"] > max(epoch_stats["acc"])
@@ -123,7 +125,7 @@ class Model:
 
             # DRAW
             self._canvas.draw(epoch_stats)
-            name = PurePath(self._config.plot_name)
+            name = PurePath(self._config.output.plot_name)
             if not name.suffix:
                 name = name.with_suffix(".png")
             self._canvas.save(PurePath(self._config.out_dir) / name)
@@ -137,7 +139,7 @@ class Model:
     def _process_head(self, head: str, batch_stats: dict):
         batch_number = 0
         for data in zip(*self._dataloaders[head]):
-            if batch_number % self._config.batch_print_freq == 0:
+            if batch_number % self._config.output.batch_print_freq == 0:
                 verbose = True
             else:
                 verbose = False

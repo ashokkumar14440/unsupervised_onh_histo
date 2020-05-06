@@ -21,7 +21,7 @@ def transfer_images(loader_tuple, config):
     current_batch_size = get_dataloader_batch_size(loader_tuple)
     channel_count = get_channel_count(loader_tuple)
     images = _create_image_list(config, channel_count)
-    for index in range(config.dataset.num_dataloaders):
+    for index in range(config.training.num_dataloaders):
         img, t_img, inverse_transform, lbl = loader_tuple[index]
         assert img.shape[0] == current_batch_size
 
@@ -40,7 +40,7 @@ def transfer_images(loader_tuple, config):
         # ):
         #     print("last batch sz %d" % curr_batch_sz)
 
-        total_size = current_batch_size * config.dataset.num_dataloaders  # times 2
+        total_size = current_batch_size * config.training.num_dataloaders  # times 2
         images[IMAGES] = images[IMAGES][:total_size, :, :, :]
         images[TRANSF_IMAGES] = images[TRANSF_IMAGES][:total_size, :, :, :]
         images[INV_TRANSFORM] = images[INV_TRANSFORM][:total_size, :, :]
@@ -57,16 +57,16 @@ def compute_losses(config, loss_fn, lamb, images, outs):
     avg_loss_batch = None
     avg_loss_no_lamb_batch = None
 
-    for i in range(config.num_sub_heads):
+    for i in range(config.architecture.num_sub_heads):
         loss, loss_no_lamb = loss_fn(
             outs[IMAGES][i],
             outs[TRANSF_IMAGES][i],
             all_affine2_to_1=images[INV_TRANSFORM],
             all_mask_img1=images[LABELS],
             lamb=lamb,
-            half_T_side_dense=config.half_T_side_dense,
-            half_T_side_sparse_min=config.half_T_side_sparse_min,
-            half_T_side_sparse_max=config.half_T_side_sparse_max,
+            half_T_side_dense=config.training.loss.half_T_side_dense,
+            half_T_side_sparse_min=config.training.loss.half_T_side_sparse_min,
+            half_T_side_sparse_max=config.training.loss.half_T_side_sparse_max,
         )
 
         if avg_loss_batch is None:
@@ -76,8 +76,8 @@ def compute_losses(config, loss_fn, lamb, images, outs):
             avg_loss_batch += loss
             avg_loss_no_lamb_batch += loss_no_lamb
 
-    avg_loss_batch /= config.num_sub_heads
-    avg_loss_no_lamb_batch /= config.num_sub_heads
+    avg_loss_batch /= config.architecture.num_sub_heads
+    avg_loss_no_lamb_batch /= config.architecture.num_sub_heads
     return [avg_loss_batch, avg_loss_no_lamb_batch]
 
 
@@ -92,18 +92,25 @@ def _create_image_list(config, channel_count):
 
 def _create_empty(config, channel_count):
     empty = torch.zeros(
-        config.dataset.batch_size, channel_count, config.input_size, config.input_size
+        config.training.batch_size,
+        channel_count,
+        config.dataset.parameters.input_size,
+        config.dataset.parameters.input_size,
     )
     return empty.to(torch.float32).cuda()
 
 
 def _create_empty_affine(config):
-    empty = torch.zeros(config.dataset.batch_size, 2, 3)
+    empty = torch.zeros(config.training.batch_size, 2, 3)
     return empty.to(torch.float32).cuda()
 
 
 def _create_empty_mask(config):
-    empty = torch.zeros(config.dataset.batch_size, config.input_size, config.input_size)
+    empty = torch.zeros(
+        config.training.batch_size,
+        config.dataset.parameters.input_size,
+        config.dataset.parameters.input_size,
+    )
     return empty.to(torch.float32).cuda()
 
 

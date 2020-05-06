@@ -58,9 +58,10 @@ class Preprocessor:
         self._preparer = preparer
         self._transformation = transformation
 
-        self._include_rgb = config.include_rgb
+        self._include_rgb = config.dataset.parameters.include_rgb
         self._do_sobelize = config.preprocessor.sobelize
-        self._input_shape = [config.input_size, config.input_size]
+        input_size = config.dataset.parameters.input_size
+        self._input_shape = [input_size, input_size]
 
         self._jitter_tf = tvt.ColorJitter(
             brightness=config.preprocessor.jitter_brightness,

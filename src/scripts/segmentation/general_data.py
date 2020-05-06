@@ -13,13 +13,15 @@ class OnhDataset(torch.utils.data.Dataset):
         self._purpose = purpose
         self._split = split
         self._root = PurePath(config.dataset.root)
-        self._do_render = config.render
-        self._render_folder = config.render_root
+        self._do_render = config.output.rendering.enabled
+        self._render_folder = (
+            PurePath(config.out_dir) / config.output.rendering.output_subfolder
+        )
         Path(self._render_folder).mkdir(parents=True, exist_ok=True)
 
-        assert self._is_gt_k_ok(config.gt_k)
-        self._gt_k = config.gt_k
-        self._input_size = config.input_size
+        assert self._is_gt_k_ok(config.architecture.num_classes)
+        self._gt_k = config.architecture.num_classes
+        self._input_size = config.dataset.parameters.input_size
         self._preprocessor = preprocessor
 
         self._files = []
