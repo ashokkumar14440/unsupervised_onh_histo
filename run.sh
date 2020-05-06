@@ -8,11 +8,10 @@
 #SBATCH --output=%j_out.log
 #SBATCH --error=%j_err.log
 
-# cd repos/invariant_information_clustering
 ml Anaconda3
 source activate
 conda activate iic
 ml cuda10.0/toolkit
 
 export CUDA_VISIBLE_DEVICES=0,1,2,3
-python -m src.scripts.segmentation.segmentation_twohead > out.log
+python -u -m src.scripts.segmentation.segmentation_twohead
