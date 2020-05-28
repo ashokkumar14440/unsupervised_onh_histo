@@ -16,6 +16,7 @@ from src.scripts.segmentation.model import Model
 
 
 def interface():
+    # TODO precheck config info with assertions
     config_file = ConfigFile("config.json")
     config = config_file.segmentation
     config = config.to_json()
