@@ -57,7 +57,7 @@ def compute_losses(config, loss_fn, lamb, images, outs):
     avg_loss_batch = None
     avg_loss_no_lamb_batch = None
 
-    for i in range(config.architecture.num_sub_heads):
+    for i in range(config.architecture.subhead_count):
         loss, loss_no_lamb = loss_fn(
             outs[IMAGES][i],
             outs[TRANSF_IMAGES][i],
@@ -76,8 +76,8 @@ def compute_losses(config, loss_fn, lamb, images, outs):
             avg_loss_batch += loss
             avg_loss_no_lamb_batch += loss_no_lamb
 
-    avg_loss_batch /= config.architecture.num_sub_heads
-    avg_loss_no_lamb_batch /= config.architecture.num_sub_heads
+    avg_loss_batch /= config.architecture.subhead_count
+    avg_loss_no_lamb_batch /= config.architecture.subhead_count
     return [avg_loss_batch, avg_loss_no_lamb_batch]
 
 

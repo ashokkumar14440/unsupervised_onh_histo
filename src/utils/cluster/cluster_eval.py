@@ -25,7 +25,7 @@ def _clustering_get_data(
     ).cuda()
     flat_predss_all = [
         torch.zeros((num_batches * config.batch_sz), dtype=torch.int32).cuda()
-        for _ in range(config.num_sub_heads)
+        for _ in range(config.subhead_count)
     ]
 
     if get_soft:
@@ -33,7 +33,7 @@ def _clustering_get_data(
             torch.zeros(
                 (num_batches * config.batch_sz, config.output_k), dtype=torch.float32
             ).cuda()
-            for _ in range(config.num_sub_heads)
+            for _ in range(config.subhead_count)
         ]
 
     num_test = 0
@@ -55,7 +55,7 @@ def _clustering_get_data(
         num_test += num_test_curr
 
         start_i = b_i * config.batch_sz
-        for i in range(config.num_sub_heads):
+        for i in range(config.subhead_count):
             x_outs_curr = x_outs[i]
             flat_preds_curr = torch.argmax(x_outs_curr, dim=1)  # along output_k
             flat_predss_all[i][start_i : (start_i + num_test_curr)] = flat_preds_curr
@@ -66,7 +66,7 @@ def _clustering_get_data(
         flat_targets_all[start_i : (start_i + num_test_curr)] = flat_targets.cuda()
 
     flat_predss_all = [
-        flat_predss_all[i][:num_test] for i in range(config.num_sub_heads)
+        flat_predss_all[i][:num_test] for i in range(config.subhead_count)
     ]
     flat_targets_all = flat_targets_all[:num_test]
 
@@ -74,7 +74,7 @@ def _clustering_get_data(
         return flat_predss_all, flat_targets_all
     else:
         soft_predss_all = [
-            soft_predss_all[i][:num_test] for i in range(config.num_sub_heads)
+            soft_predss_all[i][:num_test] for i in range(config.subhead_count)
         ]
 
         return flat_predss_all, flat_targets_all, soft_predss_all
@@ -117,7 +117,7 @@ def cluster_subheads_eval(
     )
 
     best_sub_head_eval = np.argmax(train_accs)
-    if (config.architecture.num_sub_heads > 1) and (use_sub_head is not None):
+    if (config.architecture.subhead_count > 1) and (use_sub_head is not None):
         best_sub_head = use_sub_head
     else:
         best_sub_head = best_sub_head_eval
@@ -138,8 +138,8 @@ def cluster_subheads_eval(
         )
 
         num_samples = flat_targets_all.shape[0]
-        test_accs = np.zeros(config.num_sub_heads, dtype=np.float32)
-        for i in range(config.num_sub_heads):
+        test_accs = np.zeros(config.subhead_count, dtype=np.float32)
+        for i in range(config.subhead_count):
             reordered_preds = torch.zeros(
                 num_samples, dtype=flat_predss_all[0].dtype
             ).cuda()
@@ -211,9 +211,9 @@ def _get_assignment_data_matches(
     all_matches = []
     all_accs = None
     if not just_matches:
-        all_accs = np.zeros(config.architecture.num_sub_heads, dtype=np.float32)
+        all_accs = np.zeros(config.architecture.subhead_count, dtype=np.float32)
 
-    for i in range(config.architecture.num_sub_heads):
+    for i in range(config.architecture.subhead_count):
         if verbose:
             print(
                 "starting head %d with eval mode %s, %s"
@@ -287,7 +287,7 @@ def get_subhead_using_loss(config, dataloaders_head_B, net, sobel, lamb, compare
     iterators = (d for d in dataloaders)
 
     b_i = 0
-    loss_per_sub_head = np.zeros(config.num_sub_heads)
+    loss_per_sub_head = np.zeros(config.subhead_count)
     for tup in zip(*iterators):
         net.module.zero_grad()
 
@@ -327,7 +327,7 @@ def get_subhead_using_loss(config, dataloaders_head_B, net, sobel, lamb, compare
             x_outs = net(all_imgs, head=head)
             x_tf_outs = net(all_imgs_tf, head=head)
 
-        for i in range(config.num_sub_heads):
+        for i in range(config.subhead_count):
             loss, loss_no_lamb = IID_loss(x_outs[i], x_tf_outs[i], lamb=lamb)
             loss_per_sub_head[i] += loss.item()
 

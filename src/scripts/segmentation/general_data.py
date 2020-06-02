@@ -19,8 +19,8 @@ class OnhDataset(torch.utils.data.Dataset):
         )
         Path(self._render_folder).mkdir(parents=True, exist_ok=True)
 
-        assert self._is_gt_k_ok(config.architecture.num_classes)
-        self._gt_k = config.architecture.num_classes
+        assert self._is_gt_k_ok(config.architecture.head_B_class_count)
+        self._gt_k = config.architecture.head_B_class_count
         self._input_size = config.dataset.parameters.input_size
         self._preprocessor = preprocessor
 

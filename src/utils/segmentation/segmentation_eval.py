@@ -56,7 +56,7 @@ def _segmentation_get_data(
     # vectorised
     flat_predss_all = [
         torch.zeros((num_batches * samples_per_batch), dtype=torch.uint8).cuda()
-        for _ in range(config.architecture.num_sub_heads)
+        for _ in range(config.architecture.subhead_count)
     ]
     flat_targets_all = torch.zeros(
         (num_batches * samples_per_batch), dtype=torch.uint8
@@ -98,7 +98,7 @@ def _segmentation_get_data(
 
         # vectorise: collapse from 2D to 1D
         start_i = b_i * samples_per_batch
-        for i in range(config.architecture.num_sub_heads):
+        for i in range(config.architecture.subhead_count):
             x_outs_curr = x_outs[i]
             assert not x_outs_curr.requires_grad
             flat_preds_curr = torch.argmax(x_outs_curr, dim=1)
@@ -129,14 +129,14 @@ def _segmentation_get_data(
 
     flat_predss_all = [
         flat_predss_all[i][:num_samples]
-        for i in range(config.architecture.num_sub_heads)
+        for i in range(config.architecture.subhead_count)
     ]
     flat_targets_all = flat_targets_all[:num_samples]
     mask_all = mask_all[:num_samples]
 
     flat_predss_all = [
         flat_predss_all[i].masked_select(mask=mask_all)
-        for i in range(config.architecture.num_sub_heads)
+        for i in range(config.architecture.subhead_count)
     ]
     flat_targets_all = flat_targets_all.masked_select(mask=mask_all)
 
