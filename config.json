@@ -44,10 +44,11 @@
       }
     },
     "dataset": {
-      "name": "OTHER",
-      "id": 777,
-      "name_bak": "Coco164kCuratedFew",
-      "root": "./datasets/test",
+      "name_bak": "OTHER",
+      "id": 555,
+      "name": "Coco164kCuratedFew",
+      "root_bak": "./datasets/test",
+      "root": "./datasets/cocostuff_small",
       "partitions": {
         "train": { "train": "train2017", "test": "val2017" },
         "map_assign": { "train": "train2017", "test": "val2017" },
@@ -59,8 +60,8 @@
         "use_coarse_labels": true,
         "include_things_labels": false,
         "include_animal_things": false,
-        "include_rgb": false,
-        "using_IR": false,
+        "use_rgb": true,
+        "use_ir": false,
         "mask_input": false,
         "input_size": 128
       }

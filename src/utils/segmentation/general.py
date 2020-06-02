@@ -1,25 +1,23 @@
 def set_segmentation_input_channels(config):
     # TODO this entire function is nonsense. The input channels should be
     # identifiable from the data at the point of use.
+    ir = config.dataset.parameters.use_ir
+    rgb = config.dataset.parameters.use_rgb
+    sobel = config.preprocessor.sobelize
     if "Coco" in config.dataset.name:
-        if not config.include_rgb:
-            config.in_channels = 2  # just sobel
-        else:
+        assert not ir
+        if rgb and sobel:
+            config.in_channels = 5  # rgb + sobel
+        elif rgb:
             config.in_channels = 3  # rgb
-            if config.preprocessor.sobelize:
-                config.in_channels += 2  # rgb + sobel
-        config.using_IR = False
-    elif config.dataset == "Potsdam":
-        if not config.include_rgb:
-            config.in_channels = 1 + 2  # ir + sobel
+        elif sobel:
+            config.in_channels = 3  # gray + sobel
         else:
-            config.in_channels = 4  # rgbir
-            if config.preprocessor.sobelize:
-                config.in_channels += 2  # rgbir + sobel
-        config.using_IR = True
+            config.in_channels = 1  # gray
     else:
-        # HACK
-        if not config.dataset.parameters.include_rgb:
-            config.in_channels = 1
+        assert not ir
+        assert not rgb
+        if sobel:
+            config.in_channels = 2  # gray + sobel
         else:
-            assert False
+            config.in_channels = 1  # gray

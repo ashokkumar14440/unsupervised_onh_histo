@@ -145,8 +145,11 @@ class Preprocessing:
         return image
 
     def grayscale(self, image: np.array):
+        if self._use_rgb:
+            assert image[-1] == 3
         if self._do_sobelize:
-            image = custom_greyscale_numpy(image, include_rgb=self._include_rgb)
+            # TODO this is nonsense, fix this function to be less opaque
+            image = custom_greyscale_numpy(image, include_rgb=self._use_rgb)
 
     def scale_values(self, image: np.array):
         return image.astype(np.float32) / 255.0

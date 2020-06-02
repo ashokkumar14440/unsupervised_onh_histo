@@ -50,6 +50,8 @@ def render(data, mode, name, colour_map=None, offset=0, out_dir="", labels=None)
         imgs = {RGB: None, GRAY: None, SOBEL_H: None, SOBEL_V: None}
         if data.shape[2] == 1:
             imgs[GRAY] = data[:, :, 0]
+        elif data.shape[2] == 3:
+            imgs[RGB] = data
         elif data.shape[2] == 4:
             imgs[RGB] = data[:, :, :3]
             imgs[GRAY] = data[:, :, -1]
@@ -116,7 +118,8 @@ def render(data, mode, name, colour_map=None, offset=0, out_dir="", labels=None)
         # render histogram, with title (if current labels contains 0-11, 12-26,
         # 0-91, 92-181)
         assert data.dtype == np.int32 or data.dtype == np.int64
-        assert labels is not None
+        if labels is None:
+            labels = data
 
         # 0 (-1), [1 (0), 12 (11)], [13 (12), 27 (26)]
         hist = _make_hist(data, labels)

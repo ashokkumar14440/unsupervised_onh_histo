@@ -4,7 +4,7 @@
 
 
 import os.path as osp
-from pathlib import Path
+from pathlib import Path, PurePath
 import pickle
 from glob import glob
 from src.scripts.segmentation.preprocess import Preprocessor
@@ -30,8 +30,6 @@ __all__ = [
     "Coco164kCuratedFull",
 ]
 
-RENDER_DATA = True
-
 
 class _Coco(data.Dataset):
     """Base class
@@ -46,28 +44,29 @@ class _Coco(data.Dataset):
   For both 10k and 164k (though latter is unimplemented)
   """
 
-    def __init__(self, config, split, purpose, preload, preprocessor: Preprocessor):
+    def __init__(self, config, split, purpose, preprocessor: Preprocessor):
         super(_Coco, self).__init__()
 
         self.split = split
         self._purpose = purpose
 
         self.root = config.dataset.root
-        self._render_folder = config.render_root
+        self._do_render = config.output.rendering.enabled
+        self._render_folder = str(
+            PurePath(config.out_dir) / config.output.rendering.output_subfolder
+        )
         Path(self._render_folder).mkdir(parents=True, exist_ok=True)
 
         self.single_mode = hasattr(config, "single_mode") and config.single_mode
 
         # always used (labels fields used to make relevancy mask for train)
-        self.gt_k = config.gt_k
-        self.input_sz = config.input_size
+        self.gt_k = config.architecture.num_classes
+        self.input_sz = config.dataset.parameters.input_size
 
         self._preprocessor = preprocessor
 
         assert (not hasattr(config, "mask_input")) or (not config.mask_input)
         self.mask_input = False
-
-        assert not preload
 
         self.files = []
         self.images = []
@@ -100,7 +99,7 @@ class _Coco(data.Dataset):
         t_img = self._apply_mask(t_img, mask)
 
         # RENDER
-        if RENDER_DATA:
+        if self._do_render:
             self._render(img, mode="image", name=("train_data_img_%d" % index))
             self._render(t_img, mode="image", name=("train_data_t_img_%d" % index))
             self._render(
@@ -125,7 +124,7 @@ class _Coco(data.Dataset):
         _, mask = self._generate_mask(label)
         img = self._apply_mask(img, mask)
 
-        if RENDER_DATA:
+        if self._do_render:
             self._render(img, mode="image", name=("train_data_img_%d" % index))
             self._render(mask, mode="mask", name=("train_data_mask_%d" % index))
 
@@ -140,13 +139,13 @@ class _Coco(data.Dataset):
         img = result["image"]
         label = result["label"]
 
-        if RENDER_DATA:
+        if self._do_render:
             self._render(label, mode="label", name=("test_data_label_pre_%d" % index))
 
         label, mask = self._generate_mask(label)
         img = self._apply_mask(img, mask)
 
-        if RENDER_DATA:
+        if self._do_render:
             self._render(img, mode="image", name=("test_data_img_%d" % index))
             self._render(label, mode="label", name=("test_data_label_post_%d" % index))
             self._render(mask, mode="mask", name=("test_data_mask_%d" % index))
@@ -291,7 +290,7 @@ class _Coco164kCuratedFew(_Coco):
         self.include_things_labels = config.dataset.parameters.include_things_labels
         self.include_animal_things = config.dataset.parameters.include_animal_things
 
-        version = config.coco_164k_curated_version
+        version = config.dataset.parameters.coco_164k_curated_version
 
         name = "Coco164kFew_Stuff"
         if self.include_things_labels and self.include_animal_things:

@@ -58,7 +58,7 @@ class Preprocessor:
         self._preparer = preparer
         self._transformation = transformation
 
-        self._include_rgb = config.dataset.parameters.include_rgb
+        self._include_rgb = config.dataset.parameters.use_rgb
         self._do_sobelize = config.preprocessor.sobelize
         input_size = config.dataset.parameters.input_size
         self._input_shape = [input_size, input_size]

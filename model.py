@@ -90,7 +90,7 @@ class Model:
                 mapping_assignment_dataloader=self._dataloaders["map_assign"],
                 mapping_test_dataloader=self._dataloaders["map_test"],
                 sobel=(self._config.preprocessor.sobelize),
-                using_IR=self._config.dataset.parameters.using_IR,
+                using_IR=self._config.dataset.parameters.use_ir,
             )
             if "acc" in epoch_stats:
                 is_best = eval_stats["best"] > max(epoch_stats["acc"])
