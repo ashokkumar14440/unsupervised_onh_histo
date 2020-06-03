@@ -123,9 +123,9 @@ def cluster_subheads_eval(
         best_sub_head = best_sub_head_eval
 
     if config.training.validation_mode == "IID":
-        assert (
-            config.dataset.partitions.map_assign == config.dataset.partitions.map_test
-        )
+        # assert (
+        #     config.dataset.partitions.map_assign == config.dataset.partitions.map_test
+        # )
         test_accs = train_accs
     elif config.training.validation_mode == "IID+":
         flat_predss_all, flat_targets_all, = get_data_fn(

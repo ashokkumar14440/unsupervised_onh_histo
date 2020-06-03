@@ -1,13 +1,14 @@
 from pathlib import Path, PurePath
-from types import SimpleNamespace
 
 from inc.config_snake.config import ConfigFile, ConfigDict
-from src.utils.segmentation.data import build_dataloaders
-from src.utils.segmentation.general import set_segmentation_input_channels
-from src.scripts.segmentation.preprocess import *
 
 from model import Model
 import architecture as arch
+import data
+import preprocessing as pre
+import utils
+
+import cocostuff
 
 """
   Fully unsupervised clustering for segmentation ("IIC" = "IID").
@@ -30,38 +31,100 @@ def interface():
     if "last_epoch" not in config:
         config.last_epoch = 0
 
-    config.out_dir = str(Path(config.output.root).resolve() / str(config.dataset.id))
-    out_dir = Path(config.out_dir).resolve()
-    if not (out_dir.is_dir() and out_dir.exists()):
-        out_dir.mkdir(parents=True, exist_ok=True)
-
-    config.dataloader_batch_size = int(
-        config.training.batch_size / config.training.num_dataloaders
-    )
     config.output_k = config.architecture.head_B_class_count  # for eval code
     config.eval_mode = "hung"
-    # TODO better mechanism for identifying number of channels in data
-    # TODO more robust transform into desired number of channels
-    set_segmentation_input_channels(config)
 
     train(config)
 
 
 def train(config):
-    preparer = Preparer(config)
-    transformation = Transformation(config)
-    preprocessor = Preprocessor(config, preparer, transformation)
-    head_A, map_assign, map_test = build_dataloaders(config, preprocessor)
+    LABEL_FILTERS = {"CocoFewLabels": cocostuff.CocoFewLabels}
+    transformation = pre.Transformation(**config.transformations)
+
+    if config.dataset.label_filter.name in LABEL_FILTERS:
+        label_filter = LABEL_FILTERS[config.dataset.label_filter.name](
+            class_count=config.architecture.num_classes,
+            **config.dataset.label_filter.parameters
+        )
+        label_mapper = pre.LabelMapper(mapping_function=label_filter.apply)
+    else:
+        print("unable to find label mapper, using identity mapping")
+        label_mapper = pre.LabelMapper
+
+    image_info = utils.ImageInfo(**config.dataset.parameters)
+
+    output_root = PurePath(config.output.root) / str(config.dataset.id)
+    output_root = PurePath(Path(output_root).resolve())
+    if not (Path(output_root).is_dir() and Path(output_root).exists()):
+        Path(output_root).mkdir(parents=True, exist_ok=True)
+    output_files = utils.OutputFiles(
+        root_path=output_root,
+        render_subfolder=config.output.rendering.folder,
+        image_info=image_info,
+    )
+
+    preprocessing = pre.Preprocessing(
+        transformation=transformation,
+        image_info=image_info,
+        label_mapper=label_mapper,
+        **config.preprocessor
+    )
+
+    dataset = PurePath(config.dataset.root)
+    if "partitions" in config.dataset:
+        partitions = config.dataset.partitions
+        image_folder = dataset / partitions.image
+        label_folder = dataset / partitions.label
+    else:
+        image_folder = dataset
+        label_folder = None
+    EXTENSIONS = [".png", ".jpg"]
+
+    train_prep = pre.TrainImagePreprocessor(
+        image_info=image_info,
+        preprocessing=preprocessing,
+        output_files=output_files,
+        do_render=config.output.rendering.enabled,
+        render_limit=config.output.rendering.limit,
+    )
+    train_dataset = data.ImageFolderDataset(
+        image_folder=image_folder,
+        preprocessor=train_prep,
+        extensions=EXTENSIONS,
+        label_folder=label_folder,
+    )
+    train_dataloader = data.TrainDataLoader(
+        dataset=train_dataset,
+        batch_size=config.training.batch_size,
+        shuffle=config.training.shuffle,
+    )
+
+    test_prep = pre.TestImagePreprocessor(
+        image_info=image_info,
+        preprocessing=preprocessing,
+        output_files=output_files,
+        do_render=config.output.rendering.enabled,
+        render_limit=config.output.rendering.limit,
+    )
+    test_dataset = data.ImageFolderDataset(
+        image_folder=image_folder,
+        preprocessor=test_prep,
+        extensions=EXTENSIONS,
+        label_folder=label_folder,
+    )
+    test_dataloader = data.TestDataLoader(
+        dataset=test_dataset, batch_size=config.training.batch_size
+    )
+
     dataloaders = {
-        "A": head_A,
-        "B": head_A,
-        "map_assign": map_assign,
-        "map_test": map_test,
+        "A": train_dataloader,
+        "B": train_dataloader,
+        "map_assign": test_dataloader,
+        "map_test": test_dataloader,
     }
-    set_segmentation_input_channels(config)
     trunk = arch.VGGTrunk(
         structure=arch.STRUCTURE,
-        input_channels=config.in_channels,
+        input_channels=image_info.channel_count,
         **config.architecture.trunk
     )
     head_A = arch.SegmentationNet10aHead(
@@ -80,7 +143,9 @@ def train(config):
         trunk=trunk, head_A=head_A, head_B=head_B
     )
 
-    model = Model(config, net=architecture, dataloaders=dataloaders)
+    model = Model(
+        config, output_root=output_root, net=architecture, dataloaders=dataloaders
+    )
     model.train()
 
 

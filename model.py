@@ -1,6 +1,6 @@
-from typing import Dict, Any
+from typing import Dict, Any, Union
 from datetime import datetime
-from pathlib import PurePath
+from pathlib import Path, PurePath
 
 import torch.nn
 import numpy as np
@@ -20,11 +20,14 @@ from src.scripts.segmentation.utils import (
     StateFiles,
 )
 
+PathLike = Union[str, Path, PurePath]
+
 
 class Model:
-    def __init__(self, config, net, dataloaders: Dict[str, Any]):
+    def __init__(self, config, output_root: PathLike, net, dataloaders: Dict[str, Any]):
         # INITIALIZE
-        state_files = StateFiles(config)
+        self._output_root = output_root
+        state_files = StateFiles(output_root)
         net = torch.nn.DataParallel(net)
         net.train()
         optimizer = torch.optim.Adam(
@@ -60,7 +63,6 @@ class Model:
         self._config = config
         self._heads = head_order
         self._lambs = lambs
-        self._loaders = dataloaders
         self._state_files = state_files
         self._net = net
         self._optimizer = optimizer
@@ -89,8 +91,8 @@ class Model:
                 self._net,
                 mapping_assignment_dataloader=self._dataloaders["map_assign"],
                 mapping_test_dataloader=self._dataloaders["map_test"],
-                sobel=(self._config.preprocessor.sobelize),
-                using_IR=self._config.dataset.parameters.use_ir,
+                sobel=(self._config.dataset.parameters.do_sobelize),
+                using_IR=False,
             )
             if "acc" in epoch_stats:
                 is_best = eval_stats["best"] > max(epoch_stats["acc"])
@@ -125,7 +127,7 @@ class Model:
             name = PurePath(self._config.output.plot_name)
             if not name.suffix:
                 name = name.with_suffix(".png")
-            self._canvas.save(PurePath(self._config.out_dir) / name)
+            self._canvas.save(PurePath(self._output_root) / name)
 
     def _process_epoch(self):
         batch_stats = {h: BatchStatistics() for h in self._heads}
@@ -135,7 +137,7 @@ class Model:
 
     def _process_head(self, head: str, batch_stats: dict):
         batch_number = 0
-        for data in zip(*self._dataloaders[head]):
+        for data in self._dataloaders[head]:
             if batch_number % self._config.output.batch_print_freq == 0:
                 verbose = True
             else:
@@ -157,9 +159,8 @@ class Model:
         message_prefix: str = "",
     ):
         self._net.module.zero_grad()
-        images = transfer_images(data, self._config)
-        outs = process_fn(images)
-        losses = compute_losses(self._config, self._loss_fn, lamb, images, outs)
+        outs = process_fn(data)
+        losses = compute_losses(self._config, self._loss_fn, lamb, data, outs)
         loss = losses[0].item()
         loss_no_lamb = losses[1].item()
 

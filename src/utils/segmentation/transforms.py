@@ -4,21 +4,6 @@ import torch
 import torch.nn.functional as F
 
 
-def custom_greyscale_numpy(img, include_rgb=True):
-    # Takes and returns a channel-last numpy array, uint8
-
-    # use channels last for cvtColor
-    h, w, c = img.shape
-    grey_img = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY).reshape(h, w, 1)  # new memory
-
-    if include_rgb:
-        img = np.concatenate([img, grey_img], axis=2)
-    else:
-        img = grey_img
-
-    return img
-
-
 def get_random_start_subscript(shape, required_shape):
     shape_change = _calculate_crop_change(shape, required_shape)
     return np.array([np.random.randint(low=c, high=1) for c in shape_change])

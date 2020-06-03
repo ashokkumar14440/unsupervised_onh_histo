@@ -48,21 +48,24 @@ def transfer_images(loader_tuple, config):
     return images
 
 
-def process(images, net, head):
-    return [net(images[IMAGES], head=head), net(images[TRANSF_IMAGES], head=head)]
+def process(data, net, head):
+    return {
+        "image": net(data["image"], head=head),
+        "transformed_image": net(data["transformed_image"], head=head),
+    }
 
 
-def compute_losses(config, loss_fn, lamb, images, outs):
+def compute_losses(config, loss_fn, lamb, data, outs):
     # averaging over heads
     avg_loss_batch = None
     avg_loss_no_lamb_batch = None
 
     for i in range(config.architecture.subhead_count):
         loss, loss_no_lamb = loss_fn(
-            outs[IMAGES][i],
-            outs[TRANSF_IMAGES][i],
-            all_affine2_to_1=images[INV_TRANSFORM],
-            all_mask_img1=images[LABELS],
+            outs["image"][i],
+            outs["transformed_image"][i],
+            all_affine2_to_1=data["affine_inverse"],
+            all_mask_img1=data["label"],
             lamb=lamb,
             half_T_side_dense=config.training.loss.half_T_side_dense,
             half_T_side_sparse_min=config.training.loss.half_T_side_sparse_min,
@@ -276,8 +279,8 @@ class StateFiles:
         },
     }
 
-    def __init__(self, config):
-        path = Path(config.out_dir).resolve()
+    def __init__(self, output_root: PathLike):
+        path = Path(output_root).resolve()
         if not (path.is_dir() and path.exists()):
             raise ValueError("Could not locate output folder.")
         self._base = Files(path)

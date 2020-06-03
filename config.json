@@ -15,7 +15,6 @@
     "preprocessor": {
       "prescale_all": false,
       "prescale_factor": 0.33,
-      "sobelize": false,
       "jitter_brightness": 0.4,
       "jitter_contrast": 0.4,
       "jitter_saturation": 0.4,
@@ -31,7 +30,6 @@
     "training": {
       "batch_size": 120,
       "shuffle": true,
-      "num_dataloaders": 1,
       "num_epochs": 5,
       "validation_mode": "IID",
       "head_order": ["A", "B"],
@@ -44,25 +42,26 @@
       }
     },
     "dataset": {
-      "name_bak": "OTHER",
       "id": 555,
-      "name": "Coco164kCuratedFew",
-      "root_bak": "./datasets/test",
-      "root": "./datasets/cocostuff_small",
-      "partitions": {
-        "train": { "train": "train2017", "test": "val2017" },
-        "map_assign": { "train": "train2017", "test": "val2017" },
-        "map_test": { "train": "train2017", "test": "val2017" }
+      "root": "./datasets/test",
+      "root_bak": "./datasets/cocostuff_small",
+      "partitions_bak": {
+        "image": "images",
+        "label": "annotations"
+      },
+      "label_filter": {
+        "name": "CocoFewLabels_back",
+        "parameters": {
+          "store_path": "./datasets/cocostuff/fine_to_coarse_dict",
+          "use_coarse_labels": true,
+          "include_person_things": false,
+          "include_animal_things": false
+        }
       },
       "parameters": {
-        "coco_164k_curated_version": 6,
-        "fine_to_coarse_dict": "./datasets/cocostuff/fine_to_coarse_dict",
-        "use_coarse_labels": true,
-        "include_things_labels": false,
-        "include_animal_things": false,
-        "use_rgb": true,
-        "use_ir": false,
-        "mask_input": false,
+        "is_rgb": false,
+        "use_rgb": false,
+        "do_sobelize": false,
         "input_size": 128
       }
     },
@@ -76,8 +75,9 @@
       "batch_print_freq": 5,
       "save_freq": 1,
       "rendering": {
-        "output_subfolder": "renders",
-        "enabled": true
+        "folder": "renders",
+        "enabled": true,
+        "limit": 1
       },
       "root": "./out",
       "plot_name": "plots.png"

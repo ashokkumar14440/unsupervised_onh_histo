@@ -73,7 +73,9 @@ def _segmentation_get_data(
     for b_i, batch in enumerate(dataloader):
 
         # TODO mask should be of type bool, fix in dataloaders
-        imgs, flat_targets, mask = batch
+        imgs = batch["image"]
+        flat_targets = batch["label"]
+        mask = flat_targets > 0
         imgs = imgs.cuda()
 
         # if sobel:

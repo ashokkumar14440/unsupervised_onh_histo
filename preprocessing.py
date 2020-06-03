@@ -1,4 +1,5 @@
-from typing import Optional
+from pathlib import Path, PurePath
+from typing import Callable, Optional, Union
 
 import cv2
 import numpy as np
@@ -11,9 +12,11 @@ from src.utils.segmentation.transforms import (
     get_random_start_subscript,
     reshape_by_pad_crop,
     random_affine,
-    custom_greyscale_numpy,
 )
 from src.utils.cluster.transforms import sobel_process
+import utils
+
+PathLike = Union[str, Path, PurePath]
 
 
 class Transformation:
@@ -78,30 +81,43 @@ class Transformation:
         return v
 
 
+class LabelMapper:
+    def __init__(self, mapping_function: Optional[Callable] = None):
+        self._mapping_function = mapping_function
+
+    def apply(self, label: np.array):
+        if self._mapping_function is not None:
+            return self._mapping_function(label)
+        else:
+            return label
+
+
 class Preprocessing:
     def __init__(
         self,
         transformation: Transformation,
-        input_size,
-        include_rgb,
+        image_info: utils.ImageInfo,
         prescale_all: bool,
         prescale_factor,
         jitter_brightness,
         jitter_contrast,
         jitter_saturation,
         jitter_hue,
-        sobelize: bool,
+        label_mapper: Optional[LabelMapper] = None,
     ):
+        if label_mapper is None:
+            label_mapper = LabelMapper()
+        self._jitter_fn = tvt.ColorJitter(
+            brightness=jitter_brightness,
+            contrast=jitter_contrast,
+            saturation=jitter_saturation,
+            hue=jitter_hue,
+        )
         self._transformation = transformation
-        self._perceived_shape = [input_size, input_size]
-        self._include_rgb = include_rgb
+        self._label_mapper = label_mapper
+        self._image_info = image_info
         self._do_prescale = prescale_all
         self._prescale_factor = prescale_factor
-        self._do_sobelize = sobelize
-        self._jitter_brightness = jitter_brightness
-        self._jitter_contrast = jitter_contrast
-        self._jitter_saturation = jitter_saturation
-        self._jitter_hue = jitter_hue
 
     def scale_data(self, image: np.array):
         return self._scale(image, dtype=np.float32, interp_mode=cv2.INTER_LINEAR)
@@ -133,23 +149,16 @@ class Preprocessing:
             was_gray = True
             image = image.squeeze()
         image = Image.fromarray(image.astype(np.uint8))
-        image = tvt.ColorJitter(
-            brightness=self._jitter_brightness,
-            contrast=self._jitter_contrast,
-            saturation=self._jitter_saturation,
-            hue=self._jitter_hue,
-        )
+        image = self._jitter_fn(image)
         image = np.array(image)
         if was_gray:
             image = image[..., np.newaxis]
         return image
 
     def grayscale(self, image: np.array):
-        if self._use_rgb:
-            assert image[-1] == 3
-        if self._do_sobelize:
-            # TODO this is nonsense, fix this function to be less opaque
-            image = custom_greyscale_numpy(image, include_rgb=self._use_rgb)
+        if self._image_info.sobel:
+            image = self._to_grayscale(image)
+        return image
 
     def scale_values(self, image: np.array):
         return image.astype(np.float32) / 255.0
@@ -161,9 +170,13 @@ class Preprocessing:
         image, _, inverse = self._transformation.apply(image)
         return image, inverse
 
-    def sobelize(self, image: np.array):
-        if self._do_sobelize:
-            image = sobel_process(img)
+    def map_labels(self, label: np.array):
+        return self._label_mapper.apply(label)
+
+    def sobelize(self, image: torch.tensor):
+        if self._image_info.sobel:
+            image = sobel_process(image)
+        return image
 
     def squeeze(self, image: np.array):
         return image.squeeze()
@@ -179,84 +192,174 @@ class Preprocessing:
         )
         return image
 
+    def _to_grayscale(self, image: np.array):
+        assert image.ndim == 3
+        if self._image_info.is_rgb:
+            h, w, c = image.shape
+            assert c == 3
+            gray_image = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY).reshape(h, w, 1)
+            image = np.concatenate([image, gray_image], axis=2)
+        return image
+
     def _get_required_shape(self, image: np.array):
-        required_shape = [*self._perceived_shape[0:2], *image.shape[2:]]
+        required_shape = [*self._image_info.perceived_shape, *image.shape[2:]]
         return required_shape
 
 
-class TrainImagePreprocessor:
-    def __init__(self, preprocessing: Preprocessing):
+class ImagePreprocessor:
+    IMAGE = "image"
+    LABEL = "label"
+
+    def __init__(
+        self,
+        image_info: utils.ImageInfo,
+        preprocessing: Preprocessing,
+        output_files: Optional[utils.OutputFiles] = None,
+        do_render: bool = False,
+        render_limit: int = 1,
+    ):
+        if do_render:
+            assert output_files is not None
+
+        self._image_info = image_info
         self._pre = preprocessing
+        self._output = output_files
+        self._render = do_render
+        self._limit = render_limit
+        self._count = 0
 
-    def apply(self, image: np.array, label: Optional[np.array] = None):
-        t_image = image.copy()
-        start_subscript = self._pre.get_random_start_subscript(image)
+    def apply(self, **kwargs):
+        out = self._apply_impl(**kwargs)
+        self._increment()
+        return out
 
+    def _apply_impl(self, **kwargs):
+        assert False
+
+    def _save_image(self, name: str, image: np.array):
+        if self._render and self._do_continue:
+            self._output.save_image(name, image)
+
+    def _save_label(self, name: str, label: np.array):
+        if self._render and self._do_continue:
+            self._output.save_label(name, label)
+
+    def _increment(self):
+        self._count += 1
+
+    def _do_continue(self):
+        return self._count < self._limit
+
+
+class TrainImagePreprocessor(ImagePreprocessor):
+    def __init__(self, **kwargs):
+        super(TrainImagePreprocessor, self).__init__(**kwargs)
+
+    def _apply_impl(
+        self,
+        image: np.array,
+        label: Optional[np.array] = None,
+        file_path: Optional[PathLike] = None,
+        **kwargs
+    ):
+        assert self._image_info.check_input_image(image)
         image = self._pre.scale_data(image)
         image = self._pre.force_dims(image)
+
+        start_subscript = self._pre.get_random_start_subscript(image)
         image = self._pre.pad_crop(image, start_subscript)
+        t_image = image.copy()
+
         image = self._pre.grayscale(image)
         image = self._pre.scale_values(image)
         image = self._pre.torchify(image)
         image = self._pre.sobelize(image)
+        np_image = image.cpu().numpy().transpose(1, 2, 0)
+        assert self._image_info.check_output_image(np_image)
+        name = PurePath(file_path).stem + "_train"
+        self._save_image(name, np_image)
 
-        t_image = self._pre.scale_data(t_image)
-        t_image = self._pre.force_dims(t_image)
-        t_image = self._pre.pad_crop(t_image, start_subscript)
         t_image = self._pre.color_jitter(t_image)
         t_image = self._pre.grayscale(t_image)
         t_image = self._pre.scale_values(t_image)
         t_image = self._pre.torchify(t_image)
         t_image, affine_inverse = self._pre.transform(t_image)
         t_image = self._pre.sobelize(t_image)
+        np_t_image = t_image.cpu().numpy().transpose(1, 2, 0)
+        assert self._image_info.check_output_image(np_t_image)
+        t_name = name + "_t"
+        self._save_image(t_name, np_t_image)
 
-        if label is not None:
-            label = self._pre.scale_labels(label)
-            label = self._pre.force_dims(label)
-            label = self._pre.pad_crop(label, start_subscript)
-            label = self._pre.squeeze(label)
-
-        return {
+        out = {
             "image": image,
-            "label": label,
             "transformed_image": t_image,
             "affine_inverse": affine_inverse,
         }
 
+        if label is not None:
+            assert self._image_info.check_input_label(label)
+            label = self._pre.scale_labels(label)
+            label = self._pre.force_dims(label)
+            label = self._pre.pad_crop(label, start_subscript)
+            label = self._pre.map_labels(label)
+            assert self._image_info.check_output_label(label)
+            self._save_label(name, label)
+            label = self._pre.torchify(label)
+            out["label"] = label
 
-class TestImagePreprocessor:
-    def __init__(self, preprocessing: Preprocessing):
-        self._pre = preprocessing
+        return out
 
-    def apply(self, image: np.array, label: Optional[np.array] = None):
-        start_subscript = self._pre.get_center_start_subscript(image)
 
+class TestImagePreprocessor(ImagePreprocessor):
+    def __init__(self, **kwargs):
+        super(TestImagePreprocessor, self).__init__(**kwargs)
+
+    def _apply_impl(
+        self,
+        image: np.array,
+        label: Optional[np.array] = None,
+        file_path: Optional[PathLike] = None,
+        **kwargs
+    ):
+        assert self._image_info.check_input_image(image)
         image = self._pre.scale_data(image)
         image = self._pre.force_dims(image)
+
+        start_subscript = self._pre.get_center_start_subscript(image)
         image = self._pre.pad_crop(image, start_subscript)
         image = self._pre.grayscale(image)
         image = self._pre.scale_values(image)
         image = self._pre.torchify(image)
         image = self._pre.sobelize(image)
+        np_image = image.cpu().numpy().transpose(1, 2, 0)
+        assert self._image_info.check_output_image(np_image)
+        name = PurePath(file_path).stem + "_test"
+        self._save_image(name, np_image)
 
         if label is not None:
+            assert self._image_info.check_input_label(label)
             label = self._pre.scale_labels(label)
             label = self._pre.force_dims(label)
             label = self._pre.pad_crop(label, start_subscript)
-            label = self._pre.squeeze(label)
+            label = self._pre.map_labels(label)
+            assert self._image_info.check_output_label(label)
+            self._save_label(name, label)
+            label = self._pre.torchify(label)
 
-        return image
+        return {"image": image, "label": label}
 
 
-class EvalImagePreprocessor:
-    def __init__(self, preprocessing: Preprocessing):
-        self._pre = preprocessing
+class EvalImagePreprocessor(ImagePreprocessor):
+    def __init__(self, **kwargs):
+        super(TestImagePreprocessor, self).__init__(**kwargs)
 
-    def apply(self, image: np.array):
+    def _apply_impl(self, image: np.array, **kwargs):
+        assert self._image_info.check_input_image(image)
         image = self._pre.scale_data(image)
         image = self._pre.force_dims(image)
         image = self._pre.grayscale(image)
         image = self._pre.scale_values(image)
-        image = self._pre.torchify(image)
         image = self._pre.sobelize(image)
-        return image
+        assert self._image_info.check_output_image(image)
+        image = self._pre.torchify(image)
+        return {"image": image}
