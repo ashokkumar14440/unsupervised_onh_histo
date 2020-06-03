@@ -34,18 +34,17 @@ class ConfigFile:
 
     # Raises OSError
     def __init__(self, config_path=None, schema_path=None):
-        head = ConfigDict(self, {})
+        data = {}
+        if config_path is not None:
+            with open(str(config_path), mode="r") as f:
+                data = json.load(f)
         schema = None
         if schema_path is not None:
             with open(str(schema_path), mode="r") as f:
                 schema = json.load(f)
-        if config_path is not None:
-            with open(str(config_path), mode="r") as f:
-                data = json.load(f)
-                if schema is not None:
-                    self._validate(data, schema)
-            head = _to_config(self, data)
-        self._head = head
+        if schema is not None:
+            self._validate(data, schema)
+        self._head = _to_config(self, data)
         self._path = config_path
         self._schema = schema
         self._allow_overwrite = False
@@ -66,6 +65,24 @@ class ConfigFile:
             return False
 
     def __getattr__(self, key):
+        if key in (
+            "_head",
+            "_path",
+            "_schema",
+            "_allow_overwrite",
+            "_on_change_callbacks",
+            "overwrite",
+            "path",
+            "on_change_callbacks",
+            "clear",
+            "overwrite_off",
+            "overwrite_on",
+            "save",
+            "to_json",
+            "_has_changed",
+            "_validate",
+        ):
+            return super().__getattr__(key)
         if self.__contains__(key):
             return self.__getitem__(key)
         else:
@@ -85,6 +102,13 @@ class ConfigFile:
             "overwrite",
             "path",
             "on_change_callbacks",
+            "clear",
+            "overwrite_off",
+            "overwrite_on",
+            "save",
+            "to_json",
+            "_has_changed",
+            "_validate",
         ):
             super().__setattr__(key, value)
         else:
@@ -292,7 +316,9 @@ class ConfigDict(ConfigItem):
             return False
 
     def __getattr__(self, key):
-        if self.__contains__(key):
+        if key in ("_children", "_parent"):
+            super().__getattr__(key)
+        elif self.__contains__(key):
             return self.__getitem__(key)
         else:
             raise AttributeError()
