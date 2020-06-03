@@ -478,6 +478,7 @@ def rgb2lab(rgb_image):
 def save(path, image):
     """Saves an image to disk at the location specified by path.
     """
+    image = image.copy()
     if np.issubdtype(image.dtype, np.floating):
         image = float_to_uint8(image)
     if image.shape[-1] == 1:
