@@ -38,6 +38,39 @@ def interface():
 
 
 def train(config):
+    image_info = utils.ImageInfo(**config.dataset.parameters)
+
+    trunk = arch.VGGTrunk(
+        structure=arch.STRUCTURE,
+        input_channels=image_info.channel_count,
+        **config.architecture.trunk
+    )
+    head_A = arch.SegmentationNet10aHead(
+        feature_count=arch.STRUCTURE[-1][0],
+        input_size=config.dataset.parameters.input_size,
+        class_count=config.architecture.head_A_class_count,
+        subhead_count=config.architecture.subhead_count,
+    )
+    head_B = arch.SegmentationNet10aHead(
+        feature_count=arch.STRUCTURE[-1][0],
+        input_size=config.dataset.parameters.input_size,
+        class_count=config.architecture.head_B_class_count,
+        subhead_count=config.architecture.subhead_count,
+    )
+    architecture = arch.SegmentationNet10aTwoHead(
+        trunk=trunk, head_A=head_A, head_B=head_B
+    )
+
+    output_root = PurePath(config.output.root) / str(config.dataset.id)
+    output_root = PurePath(Path(output_root).resolve())
+    if not (Path(output_root).is_dir() and Path(output_root).exists()):
+        Path(output_root).mkdir(parents=True, exist_ok=True)
+    output_files = utils.OutputFiles(
+        root_path=output_root,
+        render_subfolder=config.output.rendering.folder,
+        image_info=image_info,
+    )
+
     LABEL_FILTERS = {"CocoFewLabels": cocostuff.CocoFewLabels}
     transformation = pre.Transformation(**config.transformations)
 
@@ -50,18 +83,6 @@ def train(config):
     else:
         print("unable to find label mapper, using identity mapping")
         label_mapper = pre.LabelMapper
-
-    image_info = utils.ImageInfo(**config.dataset.parameters)
-
-    output_root = PurePath(config.output.root) / str(config.dataset.id)
-    output_root = PurePath(Path(output_root).resolve())
-    if not (Path(output_root).is_dir() and Path(output_root).exists()):
-        Path(output_root).mkdir(parents=True, exist_ok=True)
-    output_files = utils.OutputFiles(
-        root_path=output_root,
-        render_subfolder=config.output.rendering.folder,
-        image_info=image_info,
-    )
 
     preprocessing = pre.Preprocessing(
         transformation=transformation,
@@ -122,26 +143,6 @@ def train(config):
         "map_assign": test_dataloader,
         "map_test": test_dataloader,
     }
-    trunk = arch.VGGTrunk(
-        structure=arch.STRUCTURE,
-        input_channels=image_info.channel_count,
-        **config.architecture.trunk
-    )
-    head_A = arch.SegmentationNet10aHead(
-        feature_count=arch.STRUCTURE[-1][0],
-        input_size=config.dataset.parameters.input_size,
-        class_count=config.architecture.head_A_class_count,
-        subhead_count=config.architecture.subhead_count,
-    )
-    head_B = arch.SegmentationNet10aHead(
-        feature_count=arch.STRUCTURE[-1][0],
-        input_size=config.dataset.parameters.input_size,
-        class_count=config.architecture.head_B_class_count,
-        subhead_count=config.architecture.subhead_count,
-    )
-    architecture = arch.SegmentationNet10aTwoHead(
-        trunk=trunk, head_A=head_A, head_B=head_B
-    )
 
     model = Model(
         config, output_root=output_root, net=architecture, dataloaders=dataloaders
