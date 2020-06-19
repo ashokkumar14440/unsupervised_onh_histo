@@ -236,7 +236,6 @@ class SegmentationNet10aTwoHead(torch.nn.Module):
         return x
 
     def _initialize_weights(self, mode="fan_in"):
-        # TODO heads are not part of
         for m in self.modules():
             if isinstance(m, torch.nn.Conv2d):
                 torch.nn.init.kaiming_normal_(m.weight, mode=mode, nonlinearity="relu")

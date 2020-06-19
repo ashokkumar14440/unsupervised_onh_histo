@@ -117,7 +117,6 @@ class IIDLoss(Loss):
         else:
             mask = torch.ones((bn, h, w)).to(device=x1.device)
 
-        # TODO MASK IS WRONG SHAPE, should be n, 1, h, w
         # TODO may be error in undoing affine T
 
         if (self._hts_sparse_min != 0) or (self._hts_sparse_max != 0):
