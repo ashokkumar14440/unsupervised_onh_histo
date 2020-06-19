@@ -1,203 +1,168 @@
-from typing import Dict, Any, Union
-from datetime import datetime
 from pathlib import Path, PurePath
+from typing import Any, Dict, Union
 
-import torch.nn
-import numpy as np
+import torch
+import loss
+import utils
 
-from src.utils.segmentation.IID_losses import (
-    IID_segmentation_loss,
-    IID_segmentation_loss_uncollapsed,
-)
-from src.utils.segmentation.segmentation_eval import segmentation_eval
-from src.scripts.segmentation.utils import (
-    BatchStatistics,
-    EpochStatistics,
-    transfer_images,
-    process,
-    compute_losses,
-    Canvas,
-    StateFiles,
-)
+import architecture as arch
+from inc.config_snake.config import ConfigFile
 
 PathLike = Union[str, Path, PurePath]
 
-
+# canvas passed to epoch_stats
 class Model:
-    def __init__(self, config, output_root: PathLike, net, dataloaders: Dict[str, Any]):
-        # INITIALIZE
-        self._output_root = output_root
-        state_files = StateFiles(output_root)
-        net = torch.nn.DataParallel(net)
-        net.train()
-        optimizer = torch.optim.Adam(
-            net.module.parameters(), lr=config.optimizer.learning_rate
-        )
-        stats = EpochStatistics()
-        canvas = Canvas()
-        num_epochs = config.training.num_epochs
-        config.starting_epoch = 0
+    _ACC = "acc"
+    _ACC_T = "Accuracy, Best"
+    _AVG = "avg_subhead_acc"
+    _AVG_T = "Accuracy, Average"
+    _LOSS = "loss_{:s}"
+    _LOSS_T = "Loss, Head {:s}"
+    _LOSS_NL = "loss_no_lamb_{:s}"
+    _LOSS_NL_T = "Loss, Head {:s}, No Lamb"
 
-        # IF RESTART...
-        if state_files.exists("config_binary", "latest"):
-            config = state_files.load("config_binary", "latest")
-            pytorch_data = state_files.load("pytorch", "latest")
-            net.load_state_dict(pytorch_data["net"])
-            optimizer.load_state_dict(pytorch_data["optimizer"])
-            stats = state_files.load("statistics", "latest")
-            config.num_epochs = num_epochs
+    _BASE_TITLES = {_ACC: _ACC_T, _AVG: _AVG_T}
 
-        # GET LOSS FN
-        # TODO put in function
-        if not config.training.loss.use_uncollapsed:
-            loss_fn = IID_segmentation_loss
-        else:
-            loss_fn = IID_segmentation_loss_uncollapsed
-
-        # PREPARE HEAD, LAMB, DATALOADERS
-        head_order = [h for h in config.training.head_order]
-        required = [h for h in ["A", "B"]]
-        assert set(required) == set(head_order)
-        lambs = config.training.loss.lambs
-
-        self._config = config
-        self._heads = head_order
-        self._lambs = lambs
-        self._state_files = state_files
-        self._net = net
-        self._optimizer = optimizer
-        self._stats = stats
-        self._canvas = canvas
-        self._loss_fn = loss_fn
-        self._dataloaders = dataloaders
-
-    def train(self):
-        epoch_stats = EpochStatistics()
-        for epoch_number in range(
-            self._config.starting_epoch, self._config.training.num_epochs
-        ):
-            print("Starting epoch: {epoch:4d}".format(epoch=epoch_number + 1))
-
-            # PREPARE
-            if epoch_number in self._config.optimizer.schedule:
-                self._update_learning_rate(lr_mult=self._config.optimizer.multiplier)
-
-            # PROCESS
-            batch_stats = self._process_epoch()
-
-            # EVALUATE
-            eval_stats = segmentation_eval(
-                self._config,
-                self._net,
-                mapping_assignment_dataloader=self._dataloaders["map_assign"],
-                mapping_test_dataloader=self._dataloaders["map_test"],
-                sobel=(self._config.dataset.parameters.do_sobelize),
-                using_IR=False,
-            )
-            if "acc" in epoch_stats:
-                is_best = eval_stats["best"] > max(epoch_stats["acc"])
-            else:
-                is_best = True
-            epoch_stats.add(
-                {
-                    "epoch": epoch_number,
-                    "is_best": is_best,
-                    "acc": eval_stats["best"],
-                    "avg_subhead_acc": eval_stats["avg"],
-                },
-                batch_stats,
-            )
-
-            # SAVE
-            self._net.module.cpu()
-            save_dict = {
-                "net": self._net.module.state_dict(),
-                "optimizer": self._optimizer.state_dict(),
-            }
-            self._config.starting_epoch = epoch_number
-            self._state_files.save_state("latest", self._config, save_dict, epoch_stats)
-            if is_best:
-                self._state_files.save_state(
-                    "best", self._config, save_dict, epoch_stats
-                )
-            self._net.module.cuda()
-
-            # DRAW
-            self._canvas.draw(epoch_stats)
-            name = PurePath(self._config.output.plot_name)
-            if not name.suffix:
-                name = name.with_suffix(".png")
-            self._canvas.save(PurePath(self._output_root) / name)
-
-    def _process_epoch(self):
-        batch_stats = {h: BatchStatistics() for h in self._heads}
-        for head in self._heads:
-            self._process_head(head, batch_stats[head])
-        return batch_stats
-
-    def _process_head(self, head: str, batch_stats: dict):
-        batch_number = 0
-        for data in self._dataloaders[head]:
-            if batch_number % self._config.output.batch_print_freq == 0:
-                verbose = True
-            else:
-                verbose = False
-            process_fn = lambda x: process(x, self._net, head)
-            prefix = " ".join(["{head:s}", "({batch:4d})"])
-            self._process_batch(
-                data, process_fn, self._lambs[head], batch_stats, verbose, prefix
-            )
-            batch_number += 1
-
-    def _process_batch(
+    def __init__(
         self,
-        data: tuple,
-        process_fn,
-        lamb: float,
-        batch_stats: BatchStatistics,
-        verbose: bool = True,
-        message_prefix: str = "",
+        state_folder: PathLike,
+        heads_info: arch.HeadsInfo,
+        net: torch.nn.Module,
+        optimizer: torch.optim.Optimizer,
+        loss_fn: loss.Loss,
+        epoch_statistics: utils.EpochStatistics,
     ):
+        assert Path(state_folder).is_dir()
+        assert Path(state_folder).exists()
+
+        titles = self._BASE_TITLES.copy()
+        for head in heads_info.order:
+            titles[self._LOSS.format(head)] = self._LOSS_T.format(head)
+            titles[self._LOSS_NL.format(head)] = self._LOSS_NL_T.format(head)
+
+        self._state_folder = PurePath(state_folder)
+        self._title_template = titles
+        self._heads_info = heads_info
+        self._net = self.parallelize(net)
+        self._opt = optimizer
+        self._loss_fn = loss_fn
+        self._epoch_stats = epoch_statistics
+
+    def train(self, loaders: Dict[str, torch.utils.data.DataLoader]):
+        for head in self._heads_info.order:
+            assert head in loaders
+        self._data = loaders
+
+        self._net.train()
+        for epoch in self._epoch_stats.epochs:
+            print_epoch = epoch + 1
+            print("epoch {:d}".format(print_epoch))
+            # TODO update opt with lr schedule
+            stats = self._process_heads()
+            primary_head_key = self._LOSS.format(self._heads_info.primary_head)
+            means = stats[self._heads_info.primary_head].get_means()
+            primary_loss = means[primary_head_key]
+            is_best = self._epoch_stats.is_smaller(
+                key=primary_head_key, value=primary_loss
+            )
+            # TODO evaluate
+            eval_stats = {"best": 0.0, "avg": 0.0}  # ! REMOVE ME
+            epoch_values = {
+                "epoch": print_epoch,
+                "is_best": is_best,
+                self._ACC: eval_stats["best"],
+                self._AVG: eval_stats["avg"],
+            }
+            self._epoch_stats.add(
+                values=epoch_values, batch_statistics=list(stats.values())
+            )
+            self.save()
+            self._epoch_stats.draw(titles=self._title_template)
+            self._epoch_stats.save_data()
+        self._net.eval()
+
+    def _process_heads(self):
+        head_stats = {h: utils.BatchStatistics() for h in self._heads_info.order}
+        for head in self._heads_info.order:
+            print("  head {:s}".format(head))
+            stats = head_stats[head]
+            stats = self._process_batches(head, stats)
+            head_stats[head] = stats
+        return head_stats
+
+    def _process_batches(self, head: str, stats: utils.BatchStatistics):
+        loader = self._data[head]
+        count = len(loader)
+        for i, batch in enumerate(loader):
+            print("    batch {:d}/{:d}".format(i + 1, count))
+            data = self._process_images(head, batch)
+            stats.add(data)
+        return stats
+
+    def _process_images(self, head: str, batch: Dict[str, Any]):
         self._net.module.zero_grad()
-        outs = process_fn(data)
-        losses = compute_losses(self._config, self._loss_fn, lamb, data, outs)
-        loss = losses[0].item()
-        loss_no_lamb = losses[1].item()
+        processed = self._net(head=head, data=batch)
+        loss, loss_no_lamb = self._loss_fn(head=head, data=processed)
+        out = {self._LOSS.format(head): loss, self._LOSS_NL.format(head): loss_no_lamb}
+        loss.backward()
+        self._opt.step()
+        return out
 
-        if verbose:
-            update = (" " * 2) + ", ".join(
-                [
-                    "{prefix:s}",
-                    "loss: {loss:.6f}",
-                    "loss no lamb: {loss_no_lamb:.6f}",
-                    "time: {time:s}",
-                ]
-            )
-            update.format(
-                prefix=message_prefix,
-                loss=loss,
-                loss_no_lamb=loss_no_lamb,
-                time=datetime.now(),
-            )
+    def _get_batch_count(self, head):
+        return len(self._data[head])
 
-        # TODO This could possible be more graceful...
-        if not np.isfinite(loss):
-            print("Loss is not finite... %s:" % str(losses[0]))
-            exit(1)
+    STATS_FILE = "stats.csv"
+    TORCH_FILE = "torch.pickle"
+    LOSS_FILE = "loss.pickle"
+    HEADS_FILE = "heads.pickle"
+    FILES = [STATS_FILE, TORCH_FILE, LOSS_FILE, HEADS_FILE]
 
-        batch_stats.add({"loss": loss, "loss_no_lamb": loss_no_lamb})
+    def save(self):
+        state_folder = self._state_folder
+        self._epoch_stats.save(state_folder / self.STATS_FILE)
+        model = {
+            "net": self._net.module.state_dict(),
+            "optimizer": self._opt.state_dict(),
+        }
+        torch.save(model, str(state_folder / self.TORCH_FILE))
+        self._loss_fn.save(state_folder / self.LOSS_FILE)
+        self._heads_info.save(state_folder / self.HEADS_FILE)
 
-        losses[0].backward()
-        self._optimizer.step()
+    @staticmethod
+    def exists(state_folder: PathLike):
+        ok = Path(state_folder).is_dir()
+        ok = ok and Path(state_folder).exists()
+        for f in Model.FILES:
+            path = state_folder / f
+            ok_path = Path(path).is_file()
+            ok_path = Path(path).exists()
+            ok = ok and ok_path
+        return ok
 
-    def _update_learning_rate(self, lr_mult=0.1):
-        for param_group in self._optimizer.param_groups:
-            param_group["lr"] *= lr_mult
+    @classmethod
+    def load(
+        cls,
+        state_folder: PathLike,
+        net: torch.nn.Module,
+        optimizer: torch.optim.Optimizer,
+    ):
+        assert Path(state_folder).is_dir()
+        assert Path(state_folder).exists()
+        stats = utils.EpochStatistics.load(state_folder / cls.STATS_FILE)
+        model = torch.load(str(state_folder / cls.TORCH_FILE))
+        net.load_state_dict(model["net"])
+        optimizer.load_state_dict(model["optimizer"])
+        loss_fn = loss.Loss.load(state_folder / cls.LOSS_FILE)
+        heads_info = arch.HeadsInfo.load(state_folder / cls.HEADS_FILE)
+        return cls(
+            state_folder=state_folder,
+            heads_info=heads_info,
+            net=net,
+            optimizer=optimizer,
+            loss_fn=loss_fn,
+            epoch_statistics=stats,
+        )
 
-    @property
-    def heads(self):
-        return self._config.head_order
-
-    @property
-    def head_count(self):
-        return len(self._config.head_order)
+    @staticmethod
+    def parallelize(net):
+        return torch.nn.DataParallel(net)

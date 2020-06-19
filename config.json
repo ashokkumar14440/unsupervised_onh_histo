@@ -1,15 +1,30 @@
 {
   "segmentation": {
     "architecture": {
-      "head_A_class_count": 15,
-      "head_B_class_count": 3,
-      "subhead_count": 1,
       "trunk": {
-        "convolution_size": 3,
-        "padding": 1,
-        "stride": 1,
-        "batch_norm": true,
-        "batch_norm_tracking": true
+        "parameters": {
+          "convolution_size": 3,
+          "padding": 1,
+          "stride": 1,
+          "batch_norm": true,
+          "batch_norm_tracking": true
+        },
+        "structure": [
+          [64, 1],
+          [128, 1],
+          ["M", null],
+          [256, 1],
+          [256, 1],
+          [512, 2],
+          [512, 2]
+        ]
+      },
+      "heads": {
+        "subhead_count": 3,
+        "info": [
+          { "label": "A", "class_count": 15 },
+          { "label": "B", "class_count": 3, "primary": true }
+        ]
       }
     },
     "preprocessor": {
@@ -32,7 +47,7 @@
       "shuffle": true,
       "num_epochs": 5,
       "validation_mode": "IID",
-      "head_order": ["A", "B"],
+      "eval_mode": "hung",
       "loss": {
         "lambs": { "A": 1.0, "B": 1.5 },
         "use_uncollapsed": true,
@@ -73,9 +88,7 @@
     },
     "output": {
       "batch_print_freq": 5,
-      "save_freq": 1,
       "rendering": {
-        "folder": "renders",
         "enabled": true,
         "limit": 1
       },

@@ -1,12 +1,11 @@
-from typing import List, Union
 from pathlib import Path, PurePath
+from typing import List, Union
 
+from PIL import Image  # TODO use image utils
 import torch
-from preprocessing import *
-from PIL import Image
 
 from inc.python_image_utilities.image_util import patchify
-import utils
+from preprocessing import *
 
 PathLike = Union[str, Path, PurePath]
 

@@ -173,7 +173,7 @@ class Preprocessing:
     def map_labels(self, label: np.array):
         return self._label_mapper.apply(label)
 
-    def sobelize(self, image: torch.tensor):
+    def sobelize(self, image: torch.Tensor):
         if self._image_info.sobel:
             image = sobel_process(image)
         return image
@@ -234,7 +234,7 @@ class ImagePreprocessor:
         return out
 
     def _apply_impl(self, **kwargs):
-        assert False
+        return None
 
     def _save_image(self, name: str, image: np.array):
         if self._render and self._do_continue:
@@ -257,9 +257,9 @@ class TrainImagePreprocessor(ImagePreprocessor):
 
     def _apply_impl(
         self,
+        file_path: PathLike,
         image: np.array,
         label: Optional[np.array] = None,
-        file_path: Optional[PathLike] = None,
         **kwargs
     ):
         assert self._image_info.check_input_image(image)
@@ -274,7 +274,7 @@ class TrainImagePreprocessor(ImagePreprocessor):
         image = self._pre.scale_values(image)
         image = self._pre.torchify(image)
         image = self._pre.sobelize(image)
-        np_image = image.cpu().numpy().transpose(1, 2, 0)
+        np_image = image.cpu().detach().numpy().transpose(1, 2, 0)
         assert self._image_info.check_output_image(np_image)
         name = PurePath(file_path).stem + "_train"
         self._save_image(name, np_image)
@@ -285,7 +285,7 @@ class TrainImagePreprocessor(ImagePreprocessor):
         t_image = self._pre.torchify(t_image)
         t_image, affine_inverse = self._pre.transform(t_image)
         t_image = self._pre.sobelize(t_image)
-        np_t_image = t_image.cpu().numpy().transpose(1, 2, 0)
+        np_t_image = t_image.cpu().detach().numpy().transpose(1, 2, 0)
         assert self._image_info.check_output_image(np_t_image)
         t_name = name + "_t"
         self._save_image(t_name, np_t_image)
@@ -294,6 +294,8 @@ class TrainImagePreprocessor(ImagePreprocessor):
             "image": image,
             "transformed_image": t_image,
             "affine_inverse": affine_inverse,
+            "file_path": file_path,
+            **kwargs,
         }
 
         if label is not None:
@@ -316,9 +318,9 @@ class TestImagePreprocessor(ImagePreprocessor):
 
     def _apply_impl(
         self,
+        file_path: PathLike,
         image: np.array,
         label: Optional[np.array] = None,
-        file_path: Optional[PathLike] = None,
         **kwargs
     ):
         assert self._image_info.check_input_image(image)
@@ -346,12 +348,12 @@ class TestImagePreprocessor(ImagePreprocessor):
             self._save_label(name, label)
             label = self._pre.torchify(label)
 
-        return {"image": image, "label": label}
+        return {"image": image, "label": label, "file_path": file_path, **kwargs}
 
 
 class EvalImagePreprocessor(ImagePreprocessor):
     def __init__(self, **kwargs):
-        super(TestImagePreprocessor, self).__init__(**kwargs)
+        super(EvalImagePreprocessor, self).__init__(**kwargs)
 
     def _apply_impl(self, image: np.array, **kwargs):
         assert self._image_info.check_input_image(image)
@@ -362,4 +364,4 @@ class EvalImagePreprocessor(ImagePreprocessor):
         image = self._pre.sobelize(image)
         assert self._image_info.check_output_image(image)
         image = self._pre.torchify(image)
-        return {"image": image}
+        return {"image": image, **kwargs}
