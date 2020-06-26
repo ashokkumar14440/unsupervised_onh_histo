@@ -1,12 +1,13 @@
 from pathlib import Path, PurePath
-from typing import Any, Dict, Union
+from typing import Any, Dict, Union, Optional
 
+import numpy as np
 import torch
 import loss
 import utils
 
 import architecture as arch
-from inc.config_snake.config import ConfigFile
+import data
 
 PathLike = Union[str, Path, PurePath]
 
@@ -28,9 +29,9 @@ class Model:
         state_folder: PathLike,
         heads_info: arch.HeadsInfo,
         net: torch.nn.Module,
-        optimizer: torch.optim.Optimizer,
         loss_fn: loss.Loss,
         epoch_statistics: utils.EpochStatistics,
+        optimizer: Optional[torch.optim.Optimizer] = None,  # required for train()
     ):
         assert Path(state_folder).is_dir()
         assert Path(state_folder).exists()
@@ -44,11 +45,12 @@ class Model:
         self._title_template = titles
         self._heads_info = heads_info
         self._net = self.parallelize(net)
-        self._opt = optimizer
         self._loss_fn = loss_fn
         self._epoch_stats = epoch_statistics
+        self._opt = optimizer
 
     def train(self, loaders: Dict[str, torch.utils.data.DataLoader]):
+        assert self._opt is not None
         for head in self._heads_info.order:
             assert head in loaders
         self._data = loaders
@@ -80,6 +82,18 @@ class Model:
             self._epoch_stats.draw(titles=self._title_template)
             self._epoch_stats.save_data()
         self._net.eval()
+
+    def evaluate(self, output_files: utils.OutputFiles, loader: data.EvalDataLoader):
+        self._net.eval()
+        for data in loader:
+            data = self._net(data, head=self._heads_info.primary_head)
+            data["image"] = data["image"].cpu().detach().numpy()
+            data["image"] = data["image"].argmax(axis=0).astype(np.uint8)
+            data = loader.reassemble(**data)  # returns numpy
+            name = data["file_path"].stem
+            output_files.save_label(
+                name=name, label=data["image"], subfolder=output_files.EVAL
+            )
 
     def _process_heads(self):
         head_stats = {h: utils.BatchStatistics() for h in self._heads_info.order}
@@ -144,23 +158,24 @@ class Model:
         cls,
         state_folder: PathLike,
         net: torch.nn.Module,
-        optimizer: torch.optim.Optimizer,
+        optimizer: Optional[torch.optim.Optimizer] = None,  # required for train()
     ):
         assert Path(state_folder).is_dir()
         assert Path(state_folder).exists()
         stats = utils.EpochStatistics.load(state_folder / cls.STATS_FILE)
         model = torch.load(str(state_folder / cls.TORCH_FILE))
         net.load_state_dict(model["net"])
-        optimizer.load_state_dict(model["optimizer"])
         loss_fn = loss.Loss.load(state_folder / cls.LOSS_FILE)
         heads_info = arch.HeadsInfo.load(state_folder / cls.HEADS_FILE)
+        if optimizer is not None:
+            optimizer.load_state_dict(model["optimizer"])
         return cls(
             state_folder=state_folder,
             heads_info=heads_info,
             net=net,
-            optimizer=optimizer,
             loss_fn=loss_fn,
             epoch_statistics=stats,
+            optimizer=optimizer,
         )
 
     @staticmethod

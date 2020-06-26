@@ -112,7 +112,8 @@ class ImageInfo:
 class OutputFiles:
     RENDER = "render"
     STATE = "state"
-    SUBFOLDERS = [RENDER, STATE]
+    EVAL = "eval"
+    SUBFOLDERS = [RENDER, STATE, EVAL]
 
     def __init__(
         self, root_path: PathLike, image_info: ImageInfo, extension: str = ".png"
@@ -136,40 +137,52 @@ class OutputFiles:
     def get_sub_root(self, key: str):
         return self._sub[key]
 
-    def save_mask_tensor(self, name: str, image: torch.Tensor):
+    def save_mask_tensor(
+        self, name: str, image: torch.Tensor, subfolder: Optional[str] = None
+    ):
         out = self._to_numpy(image)
-        self.save_label(name, out)
+        self.save_label(name, out, subfolder)
 
-    def save_confidence_tensor(self, name: str, image: torch.Tensor):
+    def save_confidence_tensor(
+        self, name: str, image: torch.Tensor, subfolder: Optional[str] = None
+    ):
         """
         confidence dimension first, then space
         """
         out = self._to_numpy(image)
         assert out.shape[0] <= 255
         out = out.argmax(axis=0).astype(np.uint8)
-        self.save_label(name, out)
+        self.save_label(name, out, subfolder)
 
-    def save_image(self, name: str, image: np.ndarray):
+    def save_image(self, name: str, image: np.ndarray, subfolder: Optional[str] = None):
         image = image.copy()
         assert image.ndim == 3
         assert image.shape[-1] == self._image_info.channel_count
         for suffix, slc in self._image_info.slices.items():
-            path = self._compose_render_path(name, suffix)
+            if subfolder is None:
+                subfolder = self.RENDER
+            path = self._compose_path(subfolder, name, suffix)
             iutil.save(path, image[:, :, slc])
 
-    def save_label(self, name: str, label: np.ndarray):
+    def save_label(self, name: str, label: np.ndarray, subfolder: Optional[str] = None):
         label = label.copy()
         if label.ndim == 3:
             assert label.shape[-1] == 1
             label = label.squeeze()
         assert label.ndim == 2
-        path = self._compose_render_path(name, "label")
+        if subfolder is None:
+            subfolder = self.RENDER
+        path = self._compose_path(subfolder, name, "label")
         label = iutil.rescale(label)
         label[label < 0] = 255
         iutil.save(path, label)
 
     def save_statistics_plots(
-        self, name: str, data: pd.DataFrame, titles: Dict[str, str] = {}
+        self,
+        name: str,
+        data: pd.DataFrame,
+        titles: Dict[str, str] = {},
+        subfolder: Optional[str] = None,
     ):
         fig, axes = plt.subplots(len(data.columns), sharex=False, figsize=(20, 20))
         for column, ax in zip(data.columns, axes):
@@ -180,18 +193,24 @@ class OutputFiles:
                 title = column
             ax.set_title(title)
         fig.canvas.draw_idle()
-        path = self._compose_render_path(name)
+        if subfolder is None:
+            subfolder = self.RENDER
+        path = self._compose_path(subfolder, name, "label")
         fig.savefig(path)
         plt.close(fig)
 
-    def _compose_render_path(
-        self, name: str, suffix: Optional[str] = None, ext: Optional[str] = None
+    def _compose_path(
+        self,
+        subfolder: str,
+        name: str,
+        suffix: Optional[str] = None,
+        ext: Optional[str] = None,
     ):
         if ext is None:
             ext = self._ext
         if not (suffix is None or suffix == ""):
             name = self._join_suffix(name, suffix)
-        return self.get_sub_root(self.RENDER) / (name + ext)
+        return self.get_sub_root(subfolder) / (name + ext)
 
     def _join_suffix(self, name: str, suffix: str):
         return "_".join([name, suffix])

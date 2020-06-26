@@ -1,11 +1,12 @@
 from pathlib import Path, PurePath
-from typing import List, Union
+from typing import List, Union, Dict, Any, Optional
 
 from PIL import Image  # TODO use image utils
 import torch
+import numpy as np
 
-from inc.python_image_utilities.image_util import patchify
-from preprocessing import *
+from inc.python_image_utilities.image_util import patchify, unpatchify
+import preprocessing as pre
 
 PathLike = Union[str, Path, PurePath]
 
@@ -14,7 +15,7 @@ class ImageFolderDataset(torch.utils.data.Dataset):
     def __init__(
         self,
         image_folder: PathLike,
-        preprocessor,
+        preprocessor: pre.ImagePreprocessor,
         extensions: List[str],
         label_folder: Optional[PathLike] = None,
     ):
@@ -83,7 +84,7 @@ class ImageFolderDataset(torch.utils.data.Dataset):
     def _get_file_key(file_path: PathLike):
         path = PurePath(file_path)
         parents = list(reversed(path.parents))
-        return (path.stem, *parents)
+        return tuple([path.stem, *parents])
 
 
 class TrainDataLoader(torch.utils.data.DataLoader):
@@ -112,28 +113,40 @@ class EvalDataset(ImageFolderDataset):
     def __init__(
         self,
         eval_folder: PathLike,
-        preprocessor: EvalImagePreprocessor,
-        patch_shape: tuple,
+        preprocessor: pre.EvalImagePreprocessor,
+        input_size: int,
         extensions: List[str] = [".png"],
     ):
         super(EvalDataset, self).__init__(
             image_folder=eval_folder, preprocessor=preprocessor, extensions=extensions
         )
-        self._patch_shape
+        self._input_size = input_size
 
     def __getitem__(self, index):
         out = super(EvalDataset, self).__getitem__(index)
         image = out["image"]
         (patches, patch_count, out_padding) = patchify(
-            image, patch_shape=self._patch_shape
+            image, patch_shape=self._input_size
         )
-        out["image"] = patches
+        t = torch.zeros(patches.shape).cuda()
+        for i, p in enumerate(patches):
+            data = self._pre.apply(image=p)
+            t[i, ...] = data["image"]
+        out["image"] = t
         out["patch_count"] = patch_count
-        out["out_padding"] = out_padding
+        out["padding"] = out_padding
         for k, v in out.items():
             assert k is not None
             assert v is not None
         return out
+
+    def reassemble(self, image: np.ndarray, patch_count, padding, **kwargs):
+        return {
+            "image": unpatchify(
+                patches=image, patch_counts=patch_count, padding=padding
+            ),
+            **kwargs,
+        }
 
 
 class EvalDataLoader(torch.utils.data.DataLoader):
@@ -141,3 +154,6 @@ class EvalDataLoader(torch.utils.data.DataLoader):
         super(EvalDataLoader, self).__init__(
             dataset=dataset, batch_size=1, shuffle=False, num_workers=0, drop_last=False
         )
+
+    def reassemble(self, data: Dict[str, Any]):
+        return self.dataset.reassemble(data)

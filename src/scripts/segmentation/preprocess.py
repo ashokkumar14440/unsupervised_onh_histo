@@ -100,7 +100,6 @@ class Preprocessor:
         assert lbl is not None
 
         img = self._preprocess(img)
-        # lbl = self._prepare_torch(lbl)
         lbl = lbl.squeeze()
         if self._do_sobelize:
             img = self._sobelize(img)

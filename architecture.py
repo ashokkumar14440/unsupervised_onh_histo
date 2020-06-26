@@ -185,6 +185,10 @@ class HeadsInfo:
         return self._class_count
 
     @property
+    def input_size(self):
+        return self._input_size
+
+    @property
     def order(self):
         return list(self._heads.keys())
 
@@ -221,9 +225,12 @@ class SegmentationNet10aTwoHead(torch.nn.Module):
 
     def forward(self, data, head):
         images = self._forward_image(data["image"], head=head)
-        t_images = self._forward_image(data["transformed_image"], head=head)
         count = len(images)
-        out = {"count": count, "image": images, "transformed_image": t_images}
+        out = {"count": count, "image": images}
+        if self.training:
+            out["transformed_image"] = self._forward_image(
+                data["transformed_image"], head=head
+            )
         for k, v in data.items():
             if k not in out:
                 out[k] = v

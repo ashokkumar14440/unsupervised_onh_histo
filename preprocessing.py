@@ -92,7 +92,71 @@ class LabelMapper:
             return label
 
 
-class Preprocessing:
+class SimplePreprocessing:
+    def __init__(
+        self, image_info: utils.ImageInfo, prescale_all: bool, prescale_factor
+    ):
+        self._image_info = image_info
+        self._do_prescale = prescale_all
+        self._prescale_factor = prescale_factor
+
+    def scale_data(self, image: np.array):
+        if self._do_prescale:
+            out = self._scale(image, dtype=np.float32, interp_mode=cv2.INTER_LINEAR)
+        else:
+            out = image
+        return out
+
+    def scale_labels(self, image: np.array):
+        if self._do_prescale:
+            out = self._scale(image, dtype=np.int32, interp_mode=cv2.INTER_NEAREST)
+        else:
+            out = image
+        return out
+
+    def force_dims(self, image):
+        if image.ndim == 2:
+            image = image[..., np.newaxis]
+        return image
+
+    def grayscale(self, image: np.array):
+        if self._image_info.sobel:
+            image = self._to_grayscale(image)
+        return image
+
+    def scale_values(self, image: np.array):
+        return image.astype(np.float32) / 255.0
+
+    def torchify(self, image: np.array):
+        return torch.from_numpy(image).permute(2, 0, 1).cuda()
+
+    def sobelize(self, image: torch.Tensor):
+        if self._image_info.sobel:
+            image = sobel_process(image)
+        return image
+
+    def _scale(self, image: np.array, dtype, interp_mode):
+        image = image.astype(dtype)
+        image = cv2.resize(
+            image,
+            dsize=None,
+            fx=self._prescale_factor,
+            fy=self._prescale_factor,
+            interpolation=interp_mode,
+        )
+        return image
+
+    def _to_grayscale(self, image: np.array):
+        assert image.ndim == 3
+        if self._image_info.is_rgb:
+            h, w, c = image.shape
+            assert c == 3
+            gray_image = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY).reshape(h, w, 1)
+            image = np.concatenate([image, gray_image], axis=2)
+        return image
+
+
+class TransformPreprocessing(SimplePreprocessing):
     def __init__(
         self,
         transformation: Transformation,
@@ -119,17 +183,6 @@ class Preprocessing:
         self._do_prescale = prescale_all
         self._prescale_factor = prescale_factor
 
-    def scale_data(self, image: np.array):
-        return self._scale(image, dtype=np.float32, interp_mode=cv2.INTER_LINEAR)
-
-    def scale_labels(self, image: np.array):
-        return self._scale(image, dtype=np.int32, interp_mode=cv2.INTER_NEAREST)
-
-    def force_dims(self, image):
-        if image.ndim == 2:
-            image = image[..., np.newaxis]
-        return image
-
     def pad_crop(self, image: np.array, start_subscript) -> np.array:
         required_shape = self._get_required_shape(image)
         image = reshape_by_pad_crop(image, required_shape, start_subscript)
@@ -155,51 +208,12 @@ class Preprocessing:
             image = image[..., np.newaxis]
         return image
 
-    def grayscale(self, image: np.array):
-        if self._image_info.sobel:
-            image = self._to_grayscale(image)
-        return image
-
-    def scale_values(self, image: np.array):
-        return image.astype(np.float32) / 255.0
-
-    def torchify(self, image: np.array):
-        return torch.from_numpy(image).permute(2, 0, 1).cuda()
-
     def transform(self, image: np.array):
         image, _, inverse = self._transformation.apply(image)
         return image, inverse
 
     def map_labels(self, label: np.array):
         return self._label_mapper.apply(label)
-
-    def sobelize(self, image: torch.Tensor):
-        if self._image_info.sobel:
-            image = sobel_process(image)
-        return image
-
-    def squeeze(self, image: np.array):
-        return image.squeeze()
-
-    def _scale(self, image: np.array, dtype, interp_mode):
-        image = image.astype(dtype)
-        image = cv2.resize(
-            image,
-            dsize=None,
-            fx=self._prescale_factor,
-            fy=self._prescale_factor,
-            interpolation=interp_mode,
-        )
-        return image
-
-    def _to_grayscale(self, image: np.array):
-        assert image.ndim == 3
-        if self._image_info.is_rgb:
-            h, w, c = image.shape
-            assert c == 3
-            gray_image = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY).reshape(h, w, 1)
-            image = np.concatenate([image, gray_image], axis=2)
-        return image
 
     def _get_required_shape(self, image: np.array):
         required_shape = [*self._image_info.perceived_shape, *image.shape[2:]]
@@ -213,7 +227,6 @@ class ImagePreprocessor:
     def __init__(
         self,
         image_info: utils.ImageInfo,
-        preprocessing: Preprocessing,
         output_files: Optional[utils.OutputFiles] = None,
         do_render: bool = False,
         render_limit: int = 1,
@@ -222,7 +235,6 @@ class ImagePreprocessor:
             assert output_files is not None
 
         self._image_info = image_info
-        self._pre = preprocessing
         self._output = output_files
         self._render = do_render
         self._limit = render_limit
@@ -234,7 +246,7 @@ class ImagePreprocessor:
         return out
 
     def _apply_impl(self, **kwargs):
-        return None
+        return {}
 
     def _save_image(self, name: str, image: np.array):
         if self._render and self._do_continue:
@@ -252,8 +264,9 @@ class ImagePreprocessor:
 
 
 class TrainImagePreprocessor(ImagePreprocessor):
-    def __init__(self, **kwargs):
+    def __init__(self, preprocessing: TransformPreprocessing, **kwargs):
         super(TrainImagePreprocessor, self).__init__(**kwargs)
+        self._pre = preprocessing
 
     def _apply_impl(
         self,
@@ -313,8 +326,9 @@ class TrainImagePreprocessor(ImagePreprocessor):
 
 
 class TestImagePreprocessor(ImagePreprocessor):
-    def __init__(self, **kwargs):
+    def __init__(self, preprocessing: TransformPreprocessing, **kwargs):
         super(TestImagePreprocessor, self).__init__(**kwargs)
+        self._pre = preprocessing
 
     def _apply_impl(
         self,
@@ -352,8 +366,9 @@ class TestImagePreprocessor(ImagePreprocessor):
 
 
 class EvalImagePreprocessor(ImagePreprocessor):
-    def __init__(self, **kwargs):
+    def __init__(self, preprocessing: SimplePreprocessing, **kwargs):
         super(EvalImagePreprocessor, self).__init__(**kwargs)
+        self._pre = preprocessing
 
     def _apply_impl(self, image: np.array, **kwargs):
         assert self._image_info.check_input_image(image)
