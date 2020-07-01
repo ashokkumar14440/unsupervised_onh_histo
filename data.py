@@ -5,7 +5,7 @@ from PIL import Image  # TODO use image utils
 import torch
 import numpy as np
 
-from inc.python_image_utilities.image_util import patchify, unpatchify
+import inc.python_image_utilities.image_util as iutil
 import preprocessing as pre
 
 PathLike = Union[str, Path, PurePath]
@@ -37,6 +37,14 @@ class ImageFolderDataset(torch.utils.data.Dataset):
         return len(self._image_files)
 
     def __getitem__(self, index):
+        data = self._load_data(index)
+        out = self._pre.apply(**data)
+        for k, v in out.items():
+            assert k is not None
+            assert v is not None
+        return out
+
+    def _load_data(self, index):
         image_file_path = self._image_files[index]
         image = self._load_image(image_file_path)
         data = {"image": image, "file_path": str(image_file_path)}
@@ -46,11 +54,7 @@ class ImageFolderDataset(torch.utils.data.Dataset):
             assert label.ndim == 2
             assert label.shape[:2] == image.shape[:2]
             data["label"] = label
-        out = self._pre.apply(**data)
-        for k, v in out.items():
-            assert k is not None
-            assert v is not None
-        return out
+        return data
 
     def _load_image(self, file_path):
         image = Image.open(str(file_path))
@@ -113,8 +117,8 @@ class EvalDataset(ImageFolderDataset):
     def __init__(
         self,
         eval_folder: PathLike,
-        preprocessor: pre.EvalImagePreprocessor,
         input_size: int,
+        preprocessor: pre.EvalImagePreprocessor,
         extensions: List[str] = [".png"],
     ):
         super(EvalDataset, self).__init__(
@@ -123,37 +127,47 @@ class EvalDataset(ImageFolderDataset):
         self._input_size = input_size
 
     def __getitem__(self, index):
-        out = super(EvalDataset, self).__getitem__(index)
-        image = out["image"]
-        (patches, patch_count, out_padding) = patchify(
-            image, patch_shape=self._input_size
+        out = self._load_data(index)
+        (patches, patch_count, out_padding) = iutil.patchify(
+            out["image"][..., np.newaxis],
+            patch_shape=(self._input_size, self._input_size),
         )
-        t = torch.zeros(patches.shape).cuda()
-        for i, p in enumerate(patches):
-            data = self._pre.apply(image=p)
-            t[i, ...] = data["image"]
-        out["image"] = t
+        patches = patches.squeeze()
+        batch = []
+        for p in patches:
+            t = self._pre.apply(image=p)
+            batch.append(t["image"])
+        batch = torch.stack(batch, dim=0)
+        out["image"] = batch
         out["patch_count"] = patch_count
         out["padding"] = out_padding
+
         for k, v in out.items():
             assert k is not None
             assert v is not None
         return out
 
     def reassemble(self, image: np.ndarray, patch_count, padding, **kwargs):
-        return {
-            "image": unpatchify(
-                patches=image, patch_counts=patch_count, padding=padding
-            ),
-            **kwargs,
-        }
+        return iutil.unpatchify(
+            patches=image, patch_counts=patch_count, padding=padding
+        )
 
 
 class EvalDataLoader(torch.utils.data.DataLoader):
     def __init__(self, dataset: EvalDataset):
         super(EvalDataLoader, self).__init__(
-            dataset=dataset, batch_size=1, shuffle=False, num_workers=0, drop_last=False
+            dataset=dataset,
+            batch_size=1,
+            shuffle=False,
+            num_workers=0,
+            drop_last=False,
+            collate_fn=self._collate,
         )
 
-    def reassemble(self, data: Dict[str, Any]):
-        return self.dataset.reassemble(data)
+    def reassemble(self, **kwargs):
+        return self.dataset.reassemble(**kwargs)
+
+    @staticmethod
+    def _collate(data: List[Dict[str, Any]]) -> Dict[str, Any]:
+        assert len(data) == 1
+        return data[0]

@@ -22,8 +22,15 @@
       "heads": {
         "subhead_count": 3,
         "info": [
-          { "label": "A", "class_count": 15 },
-          { "label": "B", "class_count": 3, "primary": true }
+          {
+            "label": "A",
+            "class_count": 21
+          },
+          {
+            "label": "B",
+            "class_count": 7,
+            "primary": true
+          }
         ]
       }
     },
@@ -45,11 +52,14 @@
     "training": {
       "batch_size": 120,
       "shuffle": true,
-      "num_epochs": 5,
+      "num_epochs": 2500,
       "validation_mode": "IID",
       "eval_mode": "hung",
       "loss": {
-        "lambs": { "A": 1.0, "B": 1.5 },
+        "lambs": {
+          "A": 1.0,
+          "B": 1.5
+        },
         "use_uncollapsed": true,
         "half_T_side_dense": 10,
         "half_T_side_sparse_min": 0,
@@ -58,14 +68,15 @@
     },
     "dataset": {
       "id": 555,
-      "root": "./datasets/test",
+      "root": "./datasets/test_shrunk",
       "root_bak": "./datasets/cocostuff_small",
+      "extensions": [".png", ".jpg"],
       "partitions_bak": {
         "image": "images",
         "label": "annotations"
       },
-      "label_filter": {
-        "name": "CocoFewLabels_back",
+      "label_filter_bak": {
+        "name": "CocoFewLabels",
         "parameters": {
           "store_path": "./datasets/cocostuff/fine_to_coarse_dict",
           "use_coarse_labels": true,
@@ -87,6 +98,7 @@
       "multiplier": 0.1
     },
     "output": {
+      "force_training_restart": true,
       "batch_print_freq": 5,
       "rendering": {
         "enabled": true,

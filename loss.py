@@ -18,10 +18,8 @@ class Loss:
     def __init__(self, heads: List[str]):
         self._heads = heads
 
-    def __call__(
-        self, head: str, data: Dict[str, Any]
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
-        return torch.zeros((1, 1)), torch.zeros((1, 1))
+    def __call__(self, head: str, data: Dict[str, Any]) -> Dict[str, Any]:
+        return {}
 
     def save(self, file_path: PathLike):
         with open(file_path, mode="wb") as f:
@@ -66,9 +64,7 @@ class IIDLoss(Loss):
         self._output_files = output_files
         self._do_render = do_render
 
-    def __call__(
-        self, head: str, data: Dict[str, Any]
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+    def __call__(self, head: str, data: Dict[str, Any]) -> Dict[str, Any]:
         assert head in self._lambs
         assert "count" in data
         count = data["count"]
@@ -91,7 +87,14 @@ class IIDLoss(Loss):
         avg_loss = functools.reduce(lambda x, y: x + y, losses) / count
         avg_loss_no_lamb = functools.reduce(lambda x, y: x + y, losses) / count
         assert avg_loss.requires_grad
-        return avg_loss, avg_loss_no_lamb
+        subheads = np.stack([loss.clone().detach().cpu().numpy() for loss in losses])
+        best_subhead = subheads.argmin()
+        return {
+            "avg_loss": avg_loss,
+            "avg_loss_no_lamb": avg_loss_no_lamb,
+            "best_subhead": best_subhead,
+            "best_subhead_loss": subheads[best_subhead],
+        }
 
     def _loss(
         self,

@@ -21,6 +21,8 @@ class Model:
     _LOSS_T = "Loss, Head {:s}"
     _LOSS_NL = "loss_no_lamb_{:s}"
     _LOSS_NL_T = "Loss, Head {:s}, No Lamb"
+    _BEST_SUBHEAD = "best_subhead_{:s}"
+    _BEST_SUBHEAD_LOSS = "best_subhead_loss_{:s}"
 
     _BASE_TITLES = {_ACC: _ACC_T, _AVG: _AVG_T}
 
@@ -60,10 +62,10 @@ class Model:
             print_epoch = epoch + 1
             print("epoch {:d}".format(print_epoch))
             # TODO update opt with lr schedule
-            stats = self._process_heads()
+            batch_stats = self._process_heads()
+            primary_batch_means = batch_stats[self._heads_info.primary_head].get_means()
             primary_head_key = self._LOSS.format(self._heads_info.primary_head)
-            means = stats[self._heads_info.primary_head].get_means()
-            primary_loss = means[primary_head_key]
+            primary_loss = primary_batch_means[primary_head_key]
             is_best = self._epoch_stats.is_smaller(
                 key=primary_head_key, value=primary_loss
             )
@@ -76,24 +78,31 @@ class Model:
                 self._AVG: eval_stats["avg"],
             }
             self._epoch_stats.add(
-                values=epoch_values, batch_statistics=list(stats.values())
+                values=epoch_values, batch_statistics=list(batch_stats.values())
             )
-            self.save()
+            self.save(is_best=is_best)
             self._epoch_stats.draw(titles=self._title_template)
             self._epoch_stats.save_data()
         self._net.eval()
 
     def evaluate(self, output_files: utils.OutputFiles, loader: data.EvalDataLoader):
         self._net.eval()
-        for data in loader:
-            data = self._net(data, head=self._heads_info.primary_head)
-            data["image"] = data["image"].cpu().detach().numpy()
-            data["image"] = data["image"].argmax(axis=0).astype(np.uint8)
-            data = loader.reassemble(**data)  # returns numpy
-            name = data["file_path"].stem
-            output_files.save_label(
-                name=name, label=data["image"], subfolder=output_files.EVAL
+        with torch.no_grad():
+            best = self._epoch_stats.best_epoch
+            best_subhead = int(
+                best[self._BEST_SUBHEAD.format(self._heads_info.primary_head)].item()
             )
+            for data in loader:
+                out = self._net(data, head=self._heads_info.primary_head)
+                out["image"] = out["image"][best_subhead]
+                out["image"] = out["image"].detach().cpu().numpy()
+                out["image"] = out["image"].argmax(axis=1).astype(np.uint8)
+                out["image"] = out["image"][..., np.newaxis]
+                out["image"] = loader.reassemble(**out).squeeze()
+                name = PurePath(out["file_path"]).stem
+                output_files.save_label(
+                    name=name, label=out["image"], subfolder=output_files.EVAL
+                )
 
     def _process_heads(self):
         head_stats = {h: utils.BatchStatistics() for h in self._heads_info.order}
@@ -116,9 +125,14 @@ class Model:
     def _process_images(self, head: str, batch: Dict[str, Any]):
         self._net.module.zero_grad()
         processed = self._net(head=head, data=batch)
-        loss, loss_no_lamb = self._loss_fn(head=head, data=processed)
-        out = {self._LOSS.format(head): loss, self._LOSS_NL.format(head): loss_no_lamb}
-        loss.backward()
+        loss_data = self._loss_fn(head=head, data=processed)
+        out = {
+            self._LOSS.format(head): loss_data["avg_loss"].item(),
+            self._LOSS_NL.format(head): loss_data["avg_loss_no_lamb"].item(),
+            self._BEST_SUBHEAD.format(head): loss_data["best_subhead"].item(),
+            self._BEST_SUBHEAD_LOSS.format(head): loss_data["best_subhead_loss"].item(),
+        }
+        loss_data["avg_loss"].backward()
         self._opt.step()
         return out
 
@@ -126,32 +140,24 @@ class Model:
         return len(self._data[head])
 
     STATS_FILE = "stats.csv"
-    TORCH_FILE = "torch.pickle"
+    LATEST_FILE = "latest.pickle"
+    BEST_FILE = "best.pickle"
     LOSS_FILE = "loss.pickle"
     HEADS_FILE = "heads.pickle"
-    FILES = [STATS_FILE, TORCH_FILE, LOSS_FILE, HEADS_FILE]
+    FILES = [STATS_FILE, LATEST_FILE, BEST_FILE, LOSS_FILE, HEADS_FILE]
 
-    def save(self):
+    def save(self, is_best: bool):
         state_folder = self._state_folder
         self._epoch_stats.save(state_folder / self.STATS_FILE)
         model = {
             "net": self._net.module.state_dict(),
             "optimizer": self._opt.state_dict(),
         }
-        torch.save(model, str(state_folder / self.TORCH_FILE))
+        torch.save(model, str(state_folder / self.LATEST_FILE))
+        if is_best:
+            torch.save(model, str(state_folder / self.BEST_FILE))
         self._loss_fn.save(state_folder / self.LOSS_FILE)
         self._heads_info.save(state_folder / self.HEADS_FILE)
-
-    @staticmethod
-    def exists(state_folder: PathLike):
-        ok = Path(state_folder).is_dir()
-        ok = ok and Path(state_folder).exists()
-        for f in Model.FILES:
-            path = state_folder / f
-            ok_path = Path(path).is_file()
-            ok_path = Path(path).exists()
-            ok = ok and ok_path
-        return ok
 
     @classmethod
     def load(
@@ -159,11 +165,16 @@ class Model:
         state_folder: PathLike,
         net: torch.nn.Module,
         optimizer: Optional[torch.optim.Optimizer] = None,  # required for train()
+        use_best_net: bool = False,
     ):
         assert Path(state_folder).is_dir()
         assert Path(state_folder).exists()
         stats = utils.EpochStatistics.load(state_folder / cls.STATS_FILE)
-        model = torch.load(str(state_folder / cls.TORCH_FILE))
+        if use_best_net:
+            model_file = cls.BEST_FILE
+        else:
+            model_file = cls.LATEST_FILE
+        model = torch.load(str(state_folder / model_file))
         net.load_state_dict(model["net"])
         loss_fn = loss.Loss.load(state_folder / cls.LOSS_FILE)
         heads_info = arch.HeadsInfo.load(state_folder / cls.HEADS_FILE)
@@ -177,6 +188,17 @@ class Model:
             epoch_statistics=stats,
             optimizer=optimizer,
         )
+
+    @staticmethod
+    def exists(state_folder: PathLike):
+        ok = Path(state_folder).is_dir()
+        ok = ok and Path(state_folder).exists()
+        for f in Model.FILES:
+            path = state_folder / f
+            ok_path = Path(path).is_file()
+            ok_path = Path(path).exists()
+            ok = ok and ok_path
+        return ok
 
     @staticmethod
     def parallelize(net):

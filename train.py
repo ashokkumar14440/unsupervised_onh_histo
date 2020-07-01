@@ -1,9 +1,5 @@
-from pathlib import Path, PurePath
-import shutil
-
 import torch
 
-import architecture as arch
 import cocostuff
 import data
 from inc.config_snake.config import ConfigFile
@@ -11,9 +7,7 @@ import loss
 from model import Model
 import preprocessing as pre
 import utils
-
-# TODO expose to user
-EXTENSIONS = [".png", ".jpg"]
+import setup
 
 
 def interface():
@@ -26,93 +20,9 @@ def interface():
     train(config)
 
 
-def setup(config):
-    # INPUT IMAGE INFORMATION
-    image_info = utils.ImageInfo(**config.dataset.parameters)
-
-    # ARCH HEAD INFORMATION
-    heads_info = arch.HeadsInfo(
-        heads_info=config.architecture.heads.info,
-        input_size=config.dataset.parameters.input_size,
-        subhead_count=config.architecture.heads.subhead_count,
-    )
-
-    # OUTPUT_FILES
-    output_root = PurePath(config.output.root) / str(config.dataset.id)
-    output_root = PurePath(Path(output_root).resolve())
-    if not (Path(output_root).is_dir() and Path(output_root).exists()):
-        Path(output_root).mkdir(parents=True, exist_ok=True)
-    output_files = utils.OutputFiles(root_path=output_root, image_info=image_info)
-
-    # STATE_FOLDER
-    state_folder = output_files.get_sub_root(output_files.STATE)
-
-    # RENDERING PATHS
-    # TODO into output_files
-    dataset = PurePath(config.dataset.root)
-    if "partitions" in config.dataset:
-        partitions = config.dataset.partitions
-        image_folder = dataset / partitions.image
-        label_folder = dataset / partitions.label
-    else:
-        image_folder = dataset
-        label_folder = None
-
-    # NETWORK ARCHITECTURE
-    structure = arch.Structure(
-        input_channels=image_info.channel_count,
-        structure=config.architecture.trunk.structure,
-    )
-    trunk = arch.VGGTrunk(structure=structure, **config.architecture.trunk.parameters)
-    net = arch.SegmentationNet10aTwoHead(
-        trunk=trunk, heads=heads_info.build_heads(trunk.feature_count)
-    )
-    net.to(torch.device("cuda:0"))
-
-    return {
-        "image_info": image_info,
-        "heads_info": heads_info,
-        "output_files": output_files,
-        "state_folder": state_folder,
-        "image_folder": image_folder,
-        "label_folder": label_folder,
-        "net": net,
-    }
-
-
-def evaluate(config):
-    # SETUP
-    components = setup(config)
-    image_info = components["image_info"]
-    heads_info = components["heads_info"]
-    output_files = components["output_files"]
-    state_folder = components["state_folder"]
-    image_folder = components["image_folder"]
-    net = components["net"]
-    model = Model.load(state_folder, net=net)
-    preprocessing = pre.SimplePreprocessing(
-        image_info=image_info, **config.preprocessor
-    )
-    preprocessor = pre.EvalImagePreprocessor(
-        image_info=image_info,
-        preprocessing=preprocessing,
-        output_files=output_files,
-        do_render=config.output.rendering.enabled,
-        render_limit=config.output.rendering.limit,
-    )
-    eval_dataset = data.EvalDataset(
-        eval_folder=image_folder,
-        preprocessor=preprocessor,
-        input_size=heads_info.input_size,
-        extensions=EXTENSIONS,
-    )
-    eval_dataloader = data.EvalDataLoader(dataset=eval_dataset)
-    model.evaluate(output_files=output_files, loader=eval_dataloader)
-
-
 def train(config):
     # SETUP
-    components = setup(config)
+    components = setup.setup(config)
     image_info = components["image_info"]
     heads_info = components["heads_info"]
     output_files = components["output_files"]
@@ -120,6 +30,10 @@ def train(config):
     image_folder = components["image_folder"]
     label_folder = components["label_folder"]
     net = components["net"]
+
+    # FORCE RESTART
+    if config.output.force_training_restart:
+        output_files.clear_output()
 
     # OPTIMIZER
     optimizer = torch.optim.Adam(net.parameters(), lr=config.optimizer.learning_rate)
@@ -159,7 +73,10 @@ def train(config):
 
     # label mapping
     LABEL_FILTERS = {"CocoFewLabels": cocostuff.CocoFewLabels}
-    if config.dataset.label_filter.name in LABEL_FILTERS:
+    if (
+        "label_filter" in config.dataset
+        and config.dataset.label_filter.name in LABEL_FILTERS
+    ):
         label_filter = LABEL_FILTERS[config.dataset.label_filter.name](
             class_count=heads_info.class_count, **config.dataset.label_filter.parameters
         )
@@ -187,7 +104,7 @@ def train(config):
     train_dataset = data.ImageFolderDataset(
         image_folder=image_folder,
         preprocessor=train_prep,
-        extensions=EXTENSIONS,
+        extensions=config.dataset.extensions,
         label_folder=label_folder,
     )
     train_dataloader = data.TrainDataLoader(
@@ -207,7 +124,7 @@ def train(config):
     test_dataset = data.ImageFolderDataset(
         image_folder=image_folder,
         preprocessor=test_prep,
-        extensions=EXTENSIONS,
+        extensions=config.dataset.extensions,
         label_folder=label_folder,
     )
     test_dataloader = data.TestDataLoader(
@@ -227,6 +144,4 @@ def train(config):
 
 
 if __name__ == "__main__":
-    out = PurePath("out")
-    shutil.rmtree(out, ignore_errors=True)
     interface()

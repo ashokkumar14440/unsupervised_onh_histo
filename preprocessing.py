@@ -15,6 +15,7 @@ from src.utils.segmentation.transforms import (
 )
 from src.utils.cluster.transforms import sobel_process
 import utils
+import inc.python_image_utilities.image_util as iutil
 
 PathLike = Union[str, Path, PurePath]
 
@@ -94,7 +95,7 @@ class LabelMapper:
 
 class SimplePreprocessing:
     def __init__(
-        self, image_info: utils.ImageInfo, prescale_all: bool, prescale_factor
+        self, image_info: utils.ImageInfo, prescale_all: bool, prescale_factor: float
     ):
         self._image_info = image_info
         self._do_prescale = prescale_all
@@ -122,6 +123,11 @@ class SimplePreprocessing:
     def grayscale(self, image: np.array):
         if self._image_info.sobel:
             image = self._to_grayscale(image)
+        return image
+
+    def clahe(self, image: np.array):
+        if self._use_clahe:
+            image = iutil.clahe(image=image, tile_size=self._clahe_tile_size)
         return image
 
     def scale_values(self, image: np.array):
@@ -370,13 +376,14 @@ class EvalImagePreprocessor(ImagePreprocessor):
         super(EvalImagePreprocessor, self).__init__(**kwargs)
         self._pre = preprocessing
 
-    def _apply_impl(self, image: np.array, **kwargs):
+    def _apply_impl(self, image: np.ndarray, **kwargs):
         assert self._image_info.check_input_image(image)
         image = self._pre.scale_data(image)
         image = self._pre.force_dims(image)
         image = self._pre.grayscale(image)
         image = self._pre.scale_values(image)
-        image = self._pre.sobelize(image)
-        assert self._image_info.check_output_image(image)
         image = self._pre.torchify(image)
+        image = self._pre.sobelize(image)
+        np_image = image.cpu().numpy().transpose(1, 2, 0)
+        assert self._image_info.check_output_eval_image(np_image)
         return {"image": image, **kwargs}

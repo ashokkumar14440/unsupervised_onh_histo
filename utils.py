@@ -1,6 +1,7 @@
 from pathlib import Path, PurePath
 import pickle
 from typing import Dict, List, Optional, Union
+import shutil
 
 import matplotlib
 import matplotlib.pyplot as plt
@@ -74,7 +75,7 @@ class ImageInfo:
     def perceived_shape(self):
         return self._perceived_shape
 
-    def check_input_image(self, image: np.array):
+    def check_input_image(self, image: np.ndarray):
         # TODO figure out how to automate this
         if self.is_rgb:
             ok = image.ndim == 3
@@ -85,7 +86,7 @@ class ImageInfo:
         ok = ok and image.dtype == np.uint8
         return ok
 
-    def check_output_image(self, image: np.array):
+    def check_output_image(self, image: np.ndarray):
         ok = image.ndim == 3
         h, w, c = image.shape
         ok = ok and c == self.channel_count
@@ -94,12 +95,19 @@ class ImageInfo:
         ok = ok and image.dtype == np.float32
         return ok
 
+    def check_output_eval_image(self, image: np.ndarray):
+        ok = image.ndim == 3
+        _, _, c = image.shape
+        ok = ok and c == self.channel_count
+        ok = ok and image.dtype == np.float32
+        return ok
+
     def check_input_label(self, label: np.array):
         ok = label.ndim == 2
         ok = ok and label.dtype == np.int32
         return ok
 
-    def check_output_label(self, label: np.array):
+    def check_output_label(self, label: np.ndarray):
         ok = label.ndim == 3
         h, w, c = label.shape
         ok = ok and c == 1
@@ -119,20 +127,16 @@ class OutputFiles:
         self, root_path: PathLike, image_info: ImageInfo, extension: str = ".png"
     ):
         root = PurePath(root_path)
-        if not (Path(root).is_dir() and Path(root).exists()):
-            Path(root).mkdir(parents=True, exist_ok=True)
-
-        sub_root = {}
-        for sub in self.SUBFOLDERS:
-            path = root / sub
-            if not (Path(path).is_dir() and Path(path).exists()):
-                Path(path).mkdir(parents=True, exist_ok=True)
-            sub_root[sub] = PurePath(path)
+        sub_root = self._create(root)
 
         self.root = root
         self._sub = sub_root
         self._ext = extension
         self._image_info = image_info
+
+    def clear_output(self):
+        shutil.rmtree(self.root, ignore_errors=True)
+        self._sub = self._create(self.root)
 
     def get_sub_root(self, key: str):
         return self._sub[key]
@@ -173,8 +177,6 @@ class OutputFiles:
         if subfolder is None:
             subfolder = self.RENDER
         path = self._compose_path(subfolder, name, "label")
-        label = iutil.rescale(label)
-        label[label < 0] = 255
         iutil.save(path, label)
 
     def save_statistics_plots(
@@ -218,6 +220,20 @@ class OutputFiles:
     def _to_numpy(self, t: torch.Tensor) -> np.ndarray:
         return t.cpu().detach().numpy()
 
+    @classmethod
+    def _create(cls, root: PathLike):
+        if not (Path(root).is_dir() and Path(root).exists()):
+            Path(root).mkdir(parents=True, exist_ok=True)
+
+        sub_root = {}
+        for sub in cls.SUBFOLDERS:
+            path = root / sub
+            if not (Path(path).is_dir() and Path(path).exists()):
+                Path(path).mkdir(parents=True, exist_ok=True)
+            sub_root[sub] = PurePath(path)
+
+        return sub_root
+
 
 class BatchStatistics:
     def __init__(self):
@@ -260,6 +276,12 @@ class EpochStatistics:
             return 0
         else:
             return len(self._data)
+
+    @property
+    def best_epoch(self):
+        assert self._data is not None
+        bests = self._data.loc[self._data["is_best"], :]
+        return bests.iloc[-1, :]
 
     def __contains__(self, key):
         if self._data is None:
@@ -310,3 +332,57 @@ class EpochStatistics:
         with open(file_path, mode="rb") as f:
             data = pickle.load(f)
         return data
+
+
+def setup(config):
+    # INPUT IMAGE INFORMATION
+    image_info = utils.ImageInfo(**config.dataset.parameters)
+
+    # ARCH HEAD INFORMATION
+    heads_info = arch.HeadsInfo(
+        heads_info=config.architecture.heads.info,
+        input_size=config.dataset.parameters.input_size,
+        subhead_count=config.architecture.heads.subhead_count,
+    )
+
+    # OUTPUT_FILES
+    output_root = PurePath(config.output.root) / str(config.dataset.id)
+    output_root = PurePath(Path(output_root).resolve())
+    if not (Path(output_root).is_dir() and Path(output_root).exists()):
+        Path(output_root).mkdir(parents=True, exist_ok=True)
+    output_files = utils.OutputFiles(root_path=output_root, image_info=image_info)
+
+    # STATE_FOLDER
+    state_folder = output_files.get_sub_root(output_files.STATE)
+
+    # RENDERING PATHS
+    # TODO into output_files
+    dataset = PurePath(config.dataset.root)
+    if "partitions" in config.dataset:
+        partitions = config.dataset.partitions
+        image_folder = dataset / partitions.image
+        label_folder = dataset / partitions.label
+    else:
+        image_folder = dataset
+        label_folder = None
+
+    # NETWORK ARCHITECTURE
+    structure = arch.Structure(
+        input_channels=image_info.channel_count,
+        structure=config.architecture.trunk.structure,
+    )
+    trunk = arch.VGGTrunk(structure=structure, **config.architecture.trunk.parameters)
+    net = arch.SegmentationNet10aTwoHead(
+        trunk=trunk, heads=heads_info.build_heads(trunk.feature_count)
+    )
+    net.to(torch.device("cuda:0"))
+
+    return {
+        "image_info": image_info,
+        "heads_info": heads_info,
+        "output_files": output_files,
+        "state_folder": state_folder,
+        "image_folder": image_folder,
+        "label_folder": label_folder,
+        "net": net,
+    }
