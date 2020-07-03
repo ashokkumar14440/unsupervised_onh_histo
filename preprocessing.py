@@ -125,11 +125,6 @@ class SimplePreprocessing:
             image = self._to_grayscale(image)
         return image
 
-    def clahe(self, image: np.array):
-        if self._use_clahe:
-            image = iutil.clahe(image=image, tile_size=self._clahe_tile_size)
-        return image
-
     def scale_values(self, image: np.array):
         return image.astype(np.float32) / 255.0
 

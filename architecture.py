@@ -79,6 +79,7 @@ class VGGTrunk(torch.nn.Module):
                     padding=padding,
                     dilation=s[Structure.DILATION],
                     bias=False,
+                    padding_mode="replicate",
                 )
                 if batch_norm:
                     new_layers = [
@@ -112,6 +113,7 @@ class SegmentationNet10aHead(torch.nn.Module):
         "dilation": 1,
         "padding": 1,
         "bias": False,
+        "padding_mode": "replicate",
     }
 
     def __init__(

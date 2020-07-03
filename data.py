@@ -147,7 +147,8 @@ class EvalDataset(ImageFolderDataset):
             assert v is not None
         return out
 
-    def reassemble(self, image: np.ndarray, patch_count, padding, **kwargs):
+    @staticmethod
+    def reassemble(image: np.ndarray, patch_count, padding):
         return iutil.unpatchify(
             patches=image, patch_counts=patch_count, padding=padding
         )
@@ -164,8 +165,8 @@ class EvalDataLoader(torch.utils.data.DataLoader):
             collate_fn=self._collate,
         )
 
-    def reassemble(self, **kwargs):
-        return self.dataset.reassemble(**kwargs)
+    def reassemble(self, image: np.ndarray, patch_count, padding):
+        return self.dataset.reassemble(image, patch_count, padding)
 
     @staticmethod
     def _collate(data: List[Dict[str, Any]]) -> Dict[str, Any]:

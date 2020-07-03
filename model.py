@@ -94,14 +94,31 @@ class Model:
             )
             for data in loader:
                 out = self._net(data, head=self._heads_info.primary_head)
-                out["image"] = out["image"][best_subhead]
-                out["image"] = out["image"].detach().cpu().numpy()
-                out["image"] = out["image"].argmax(axis=1).astype(np.uint8)
-                out["image"] = out["image"][..., np.newaxis]
-                out["image"] = loader.reassemble(**out).squeeze()
+                lbl = out["image"][best_subhead]
+                lbl = lbl.detach().cpu().numpy()
+                lbl = lbl.argmax(axis=1).astype(np.uint8)
+                lbl = lbl[..., np.newaxis]
+                lbl = loader.reassemble(
+                    image=lbl, patch_count=out["patch_count"], padding=out["padding"]
+                ).squeeze()
                 name = PurePath(out["file_path"]).stem
                 output_files.save_label(
-                    name=name, label=out["image"], subfolder=output_files.EVAL
+                    name=name, label=lbl, subfolder=output_files.EVAL
+                )
+                img = data["image"]
+                img = img.detach().cpu().numpy()
+                img = img.transpose((0, 2, 3, 1))
+                if img.ndim == 4 and img.shape[-1] > 1:
+                    img = img[..., 0]
+                    img = img[..., np.newaxis]
+                img = loader.reassemble(
+                    image=img, patch_count=data["patch_count"], padding=data["padding"]
+                ).squeeze()
+                output_files.save_rgb_label(
+                    name=name, label=lbl, image=img, subfolder=output_files.EVAL
+                )
+                output_files.save_rgb_label(
+                    name=name, label=lbl, subfolder=output_files.EVAL
                 )
 
     def _process_heads(self):

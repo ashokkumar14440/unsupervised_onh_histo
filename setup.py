@@ -22,7 +22,11 @@ def setup(config):
     output_root = PurePath(Path(output_root).resolve())
     if not (Path(output_root).is_dir() and Path(output_root).exists()):
         Path(output_root).mkdir(parents=True, exist_ok=True)
-    output_files = utils.OutputFiles(root_path=output_root, image_info=image_info)
+    output_files = utils.OutputFiles(
+        root_path=output_root,
+        label_colors=config.output.label_colors,
+        image_info=image_info,
+    )
 
     # STATE_FOLDER
     state_folder = output_files.get_sub_root(output_files.STATE)

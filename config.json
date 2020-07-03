@@ -87,7 +87,7 @@
       "parameters": {
         "is_rgb": false,
         "use_rgb": false,
-        "do_sobelize": false,
+        "do_sobelize": true,
         "input_size": 128
       }
     },
@@ -104,6 +104,20 @@
         "enabled": true,
         "limit": 1
       },
+      "label_colors": [
+        [255, 255, 109],
+        [36, 255, 36],
+        [219, 209, 0],
+        [0, 73, 73],
+        [255, 182, 119],
+        [73, 0, 146],
+        [0, 109, 219],
+        [182, 109, 255],
+        [109, 182, 255],
+        [182, 219, 255],
+        [146, 0, 0],
+        [146, 73, 0]
+      ],
       "root": "./out",
       "plot_name": "plots.png"
     },

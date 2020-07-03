@@ -1,6 +1,6 @@
 from pathlib import Path, PurePath
 import pickle
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Optional, Union, Tuple
 import shutil
 
 import matplotlib
@@ -8,13 +8,17 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import torch
+from skimage.color import label2rgb
 
 import inc.python_image_utilities.image_util as iutil
+import utils
+
 
 matplotlib.use("Agg")
 
 
 PathLike = Union[str, Path, PurePath]
+COLOR = Tuple[float, float, float]
 
 
 class ImageInfo:
@@ -30,11 +34,19 @@ class ImageInfo:
 
     CHANNEL_INFO = {
         RGB_AND_SOBEL: {
-            CHANNEL_COUNT: 5,
-            SLICES: {RGB: slice(0, 3), SOBEL_H: slice(3, 4), SOBEL_V: slice(4, 5)},
+            CHANNEL_COUNT: 6,
+            SLICES: {
+                RGB: slice(0, 3),
+                GRAY: slice(3, 4),
+                SOBEL_H: slice(4, 5),
+                SOBEL_V: slice(5, 6),
+            },
         },
         RGB: {CHANNEL_COUNT: 3, SLICES: {RGB: slice(0, 3)}},
-        SOBEL: {CHANNEL_COUNT: 2, SLICES: {SOBEL_H: slice(0, 1), SOBEL_V: slice(1, 2)}},
+        SOBEL: {
+            CHANNEL_COUNT: 3,
+            SLICES: {GRAY: slice(0, 1), SOBEL_H: slice(1, 2), SOBEL_V: slice(2, 3)},
+        },
         GRAY: {CHANNEL_COUNT: 1, SLICES: {GRAY: slice(0, 1)}},
     }
 
@@ -124,14 +136,39 @@ class OutputFiles:
     SUBFOLDERS = [RENDER, STATE, EVAL]
 
     def __init__(
-        self, root_path: PathLike, image_info: ImageInfo, extension: str = ".png"
+        self,
+        root_path: PathLike,
+        image_info: ImageInfo,
+        extension: str = ".png",
+        label_colors: Optional[List[List[int]]] = None,
     ):
         root = PurePath(root_path)
         sub_root = self._create(root)
 
+        if label_colors is None:
+            label_colors = [
+                [0, 73, 73],
+                [255, 182, 119],
+                [73, 0, 146],
+                [0, 109, 219],
+                [182, 109, 255],
+                [109, 182, 255],
+                [182, 219, 255],
+                [146, 0, 0],
+                [146, 73, 0],
+                [219, 209, 0],
+                [36, 255, 36],
+                [255, 255, 109],
+            ]
+            # from http://mkweb.bcgsc.ca/biovis2012
+        assert label_colors is not None
+        lc_np = np.array(label_colors) / 255.0
+        label_colors = lc_np.tolist()
+
         self.root = root
         self._sub = sub_root
         self._ext = extension
+        self._label_colors = label_colors
         self._image_info = image_info
 
     def clear_output(self):
@@ -178,6 +215,27 @@ class OutputFiles:
             subfolder = self.RENDER
         path = self._compose_path(subfolder, name, "label")
         iutil.save(path, label)
+
+    def save_rgb_label(
+        self,
+        name: str,
+        label: np.ndarray,
+        image: Optional[np.ndarray] = None,
+        subfolder: Optional[str] = None,
+    ):
+        label = label.copy()
+        if label.ndim == 3:
+            assert label.shape[-1] == 1
+            label = label.squeeze()
+        assert label.ndim == 2
+        rgb = label2rgb(label, image=image, colors=self._label_colors, kind="overlay")
+        if subfolder is None:
+            subfolder = self.RENDER
+        suffix = "rgb_label"
+        if image is not None:
+            suffix += "_overlay"
+        path = self._compose_path(subfolder, name, suffix)
+        iutil.save(path, rgb)
 
     def save_statistics_plots(
         self,
