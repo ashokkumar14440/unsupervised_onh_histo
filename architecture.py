@@ -227,8 +227,7 @@ class SegmentationNet10aTwoHead(torch.nn.Module):
 
     def forward(self, data, head):
         images = self._forward_image(data["image"], head=head)
-        count = len(images)
-        out = {"count": count, "image": images}
+        out = {"image": images}
         if self.training:
             out["transformed_image"] = self._forward_image(
                 data["transformed_image"], head=head

@@ -66,9 +66,9 @@ class IIDLoss(Loss):
 
     def __call__(self, head: str, data: Dict[str, Any]) -> Dict[str, Any]:
         assert head in self._lambs
-        assert "count" in data
-        count = data["count"]
+        count = len(data["image"])
         assert 0 < count
+        assert len(data["transformed_image"]) == count
 
         lamb = self._lambs[head]
         losses = []
