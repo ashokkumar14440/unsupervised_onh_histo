@@ -1,3 +1,4 @@
+import args
 import data
 from inc.config_snake.config import ConfigFile
 from model import Model
@@ -49,4 +50,4 @@ def evaluate(config):
 
 if __name__ == "__main__":
     arguments = args.Arguments()
-    interface(config_file_path=config_file_path)
+    interface(config_file_path=arguments.config_file_path)
