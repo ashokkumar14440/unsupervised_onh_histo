@@ -293,6 +293,23 @@ class OutputFiles:
         return sub_root
 
 
+class Counter:
+    def __init__(self, limit: int):
+        assert 0 <= limit
+        self._count = 0
+        self._limit = limit
+
+    @property
+    def do_continue(self):
+        return self._count < self._limit
+
+    def increment(self):
+        self._count += 1
+
+    def reset(self):
+        self._count = 0
+
+
 class BatchStatistics:
     def __init__(self):
         self._data = None

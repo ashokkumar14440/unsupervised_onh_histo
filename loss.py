@@ -45,6 +45,7 @@ class IIDLoss(Loss):
         half_T_side_sparse_max: int,
         output_files: Optional[utils.OutputFiles] = None,
         do_render: Optional[bool] = None,
+        render_limit: int = 1,
     ):
         super(IIDLoss, self).__init__(heads=heads)
         for head in heads:
@@ -63,6 +64,7 @@ class IIDLoss(Loss):
         self._hts_sparse_max = half_T_side_sparse_max
         self._output_files = output_files
         self._do_render = do_render
+        self._counter = utils.Counter(render_limit)
 
     def __call__(self, head: str, data: Dict[str, Any]) -> Dict[str, Any]:
         assert head in self._lambs
@@ -129,7 +131,7 @@ class IIDLoss(Loss):
                 half_side_max=self._hts_sparse_max,
             )
 
-        if self._do_render:
+        if self._do_render and self._counter.do_continue:
             name = PurePath(file_path[0]).stem
             self._output_files.save_confidence_tensor(name + "_loss_labels", x1[0])
             self._output_files.save_confidence_tensor(
@@ -139,6 +141,7 @@ class IIDLoss(Loss):
                 name + "_loss_untransf_labels", x2[0]
             )
             self._output_files.save_mask_tensor(name + "_loss_mask", mask[0])
+        self._counter.increment()
 
         # zero out all irrelevant patches
         mask = mask.view(bn, 1, h, w)  # mult, already float32

@@ -237,30 +237,23 @@ class ImagePreprocessor:
         self._image_info = image_info
         self._output = output_files
         self._render = do_render
-        self._limit = render_limit
-        self._count = 0
+        self._counter = utils.Counter(render_limit)
 
     def apply(self, **kwargs):
         out = self._apply_impl(**kwargs)
-        self._increment()
+        self._counter.increment()
         return out
 
     def _apply_impl(self, **kwargs):
         return {}
 
     def _save_image(self, name: str, image: np.array):
-        if self._render and self._do_continue:
+        if self._render and self._counter.do_continue:
             self._output.save_image(name, image)
 
     def _save_label(self, name: str, label: np.array):
-        if self._render and self._do_continue:
+        if self._render and self._counter.do_continue:
             self._output.save_label(name, label)
-
-    def _increment(self):
-        self._count += 1
-
-    def _do_continue(self):
-        return self._count < self._limit
 
 
 class TrainImagePreprocessor(ImagePreprocessor):
