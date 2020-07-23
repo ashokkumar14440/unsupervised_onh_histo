@@ -14,4 +14,4 @@ conda activate iic
 ml cuda10.0/toolkit
 
 export CUDA_VISIBLE_DEVICES=0,1,2,3
-python -u -m src.scripts.segmentation.segmentation_twohead
+python -u -m src.scripts.segmentation.segmentation_twohead --config config.json

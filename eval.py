@@ -5,8 +5,8 @@ import preprocessing as pre
 import setup
 
 
-def interface():
-    config_file = ConfigFile("config.json")
+def interface(config_file_path):
+    config_file = ConfigFile(config_file_path)
     config = config_file.segmentation
 
     assert config.training.validation_mode == "IID"
@@ -48,4 +48,5 @@ def evaluate(config):
 
 
 if __name__ == "__main__":
-    interface()
+    arguments = args.Arguments()
+    interface(config_file_path=config_file_path)

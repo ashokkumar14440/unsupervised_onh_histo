@@ -1,17 +1,18 @@
 import torch
 
+import args
 import cocostuff
 import data
 from inc.config_snake.config import ConfigFile
 import loss
 from model import Model
 import preprocessing as pre
-import utils
 import setup
+import utils
 
 
-def interface():
-    config_file = ConfigFile("config.json")
+def interface(config_file_path):
+    config_file = ConfigFile(config_file_path)
     config = config_file.segmentation
 
     assert config.training.validation_mode == "IID"
@@ -144,4 +145,5 @@ def train(config):
 
 
 if __name__ == "__main__":
-    interface()
+    arguments = args.Arguments()
+    interface(config_file_path=arguments.config_file_path)
