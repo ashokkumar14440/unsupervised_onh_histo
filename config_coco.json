@@ -24,11 +24,11 @@
         "info": [
           {
             "label": "A",
-            "class_count": 21
+            "class_count": 15
           },
           {
             "label": "B",
-            "class_count": 7,
+            "class_count": 3,
             "primary": true
           }
         ]
@@ -67,12 +67,25 @@
       }
     },
     "dataset": {
-      "id": 555,
-      "root": "./datasets/test_shrunk",
+      "id": 556,
+      "root": "./datasets/cocostuff_small",
       "extensions": [".png", ".jpg"],
+      "partitions": {
+        "image": "images",
+        "label": "annotations"
+      },
+      "label_filter": {
+        "name": "CocoFewLabels",
+        "parameters": {
+          "store_path": "./datasets/cocostuff/fine_to_coarse_dict",
+          "use_coarse_labels": true,
+          "include_person_things": false,
+          "include_animal_things": false
+        }
+      },
       "parameters": {
-        "is_rgb": false,
-        "use_rgb": false,
+        "is_rgb": true,
+        "use_rgb": true,
         "do_sobelize": true,
         "input_size": 128
       }
