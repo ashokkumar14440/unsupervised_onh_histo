@@ -7,15 +7,14 @@ from PIL import Image
 import torch
 import torchvision.transforms as tvt
 
-from src.utils.segmentation.transforms import (
+from transforms import (
     get_center_start_subscript,
     get_random_start_subscript,
     reshape_by_pad_crop,
     random_affine,
+    sobel_process,
 )
-from src.utils.cluster.transforms import sobel_process
 import utils
-import inc.python_image_utilities.image_util as iutil
 
 PathLike = Union[str, Path, PurePath]
 

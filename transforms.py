@@ -1,6 +1,7 @@
 import cv2
 import numpy as np
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
 
 
@@ -186,6 +187,32 @@ def random_translation(img, half_side_min, half_side_max):
     assert img.shape[1:] == (h, w)
 
     return img
+
+
+def sobel_process(image: torch.Tensor):
+    gray = image[-1, ...].unsqueeze(0)
+    other = image[:-1, ...]
+    sobel = make_sobel(gray.unsqueeze(0))
+    return torch.cat([other, gray, sobel], dim=0)
+
+
+def make_sobel(image: torch.Tensor):
+    HORIZONTAL = np.array([[1, 0, -1], [2, 0, -2], [1, 0, -1]])
+    CONV_H = generate_convolution(HORIZONTAL)
+    dx = CONV_H(image).data
+    VERTICAL = np.array([[1, 2, 1], [0, 0, 0], [-1, -2, -1]])
+    CONV_V = generate_convolution(VERTICAL)
+    dy = CONV_V(image).data
+    return torch.cat([dx, dy], dim=1).squeeze()
+
+
+def generate_convolution(sobel_filter):
+    filt = torch.from_numpy(sobel_filter)
+    filt = filt.cuda().float()
+    filt = filt.unsqueeze(0).unsqueeze(0)
+    conv = nn.Conv2d(1, 1, kernel_size=3, padding=1, bias=False)
+    conv.weight = nn.Parameter(filt, requires_grad=False)
+    return conv
 
 
 if __name__ == "__main__":
