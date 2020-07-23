@@ -393,7 +393,7 @@ class EpochStatistics:
             "epoch_statistics", self._data.loc[:, list(titles.keys())], titles
         )
 
-    def save_data(self):
+    def save_csv(self):
         self._data.to_csv(
             self._output_files.root / "epochs.csv", index=False, sep=self._DELIMITER
         )

@@ -82,7 +82,7 @@ class Model:
             )
             self.save(is_best=is_best)
             self._epoch_stats.draw(titles=self._title_template)
-            self._epoch_stats.save_data()
+            self._epoch_stats.save_csv()
         self._net.eval()
 
     def evaluate(self, output_files: utils.OutputFiles, loader: data.EvalDataLoader):
