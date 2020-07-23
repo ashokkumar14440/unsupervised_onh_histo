@@ -156,7 +156,7 @@ class Model:
     def _get_batch_count(self, head):
         return len(self._data[head])
 
-    STATS_FILE = "stats.csv"
+    STATS_FILE = "stats.pickle"
     LATEST_FILE = "latest.pickle"
     BEST_FILE = "best.pickle"
     LOSS_FILE = "loss.pickle"
