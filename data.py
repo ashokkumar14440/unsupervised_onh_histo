@@ -128,9 +128,10 @@ class EvalDataset(ImageFolderDataset):
 
     def __getitem__(self, index):
         out = self._load_data(index)
+        if out["image"].ndim == 2:
+            out["image"] = out["image"][..., np.newaxis]
         (patches, patch_count, out_padding) = iutil.patchify(
-            out["image"][..., np.newaxis],
-            patch_shape=(self._input_size, self._input_size),
+            out["image"], patch_shape=(self._input_size, self._input_size)
         )
         patches = patches.squeeze()
         batch = []
