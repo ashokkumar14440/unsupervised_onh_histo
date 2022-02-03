@@ -1,9 +1,9 @@
 import args
 import data
-from inc.config_snake.config import ConfigFile
-from model import Model
 import preprocessing as pre
 import setup
+from inc.config_snake.config import ConfigFile
+from model import Model
 
 
 def interface(config_file_path):

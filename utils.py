@@ -1,7 +1,7 @@
-from pathlib import Path, PurePath
 import pickle
-from typing import Dict, List, Optional, Union, Tuple
 import shutil
+from pathlib import Path, PurePath
+from typing import Dict, List, Optional, Tuple, Union
 
 import matplotlib
 import matplotlib.pyplot as plt
@@ -12,7 +12,6 @@ from skimage.color import label2rgb
 
 import inc.python_image_utilities.image_util as iutil
 import utils
-
 
 matplotlib.use("Agg")
 
