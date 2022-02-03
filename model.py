@@ -92,30 +92,32 @@ class Model:
             best_subhead = int(
                 best[self._BEST_SUBHEAD.format(self._heads_info.primary_head)].item()
             )
-            for data in loader:
-                out = self._net(data, head=self._heads_info.primary_head)
-                lbl = out["image"][best_subhead]
-                lbl = lbl.detach().cpu().numpy()
-                lbl = lbl.argmax(axis=1).astype(np.uint8)
+            for image_batches in loader:
+                evaluated_patches = []
+                for batch in image_batches["batches"]:
+                    result = self._net(batch, head=self._heads_info.primary_head)
+                    evaluated_batch = result["image"][best_subhead]
+                    evaluated_batch = evaluated_batch.detach().cpu().numpy()
+                    evaluated_patches.append(evaluated_batch)
+                evaluated_patches = np.concatenate(evaluated_patches, axis=0)
+
+                patch_count = image_batches["patch_count"]
+                padding = image_batches["padding"]
+                file_path = image_batches["file_path"]
+                name = PurePath(file_path).stem
+
+                lbl = evaluated_patches.argmax(axis=1).astype(np.uint8)
                 lbl = lbl[..., np.newaxis]
                 lbl = loader.reassemble(
-                    image=lbl, patch_count=out["patch_count"], padding=out["padding"]
+                    image=lbl, patch_count=patch_count, padding=padding,
                 ).squeeze()
-                name = PurePath(out["file_path"]).stem
                 output_files.save_label(
                     name=name, label=lbl, subfolder=output_files.EVAL
                 )
-                img = data["image"]
-                img = img.detach().cpu().numpy()
-                img = img.transpose((0, 2, 3, 1))
-                if img.ndim == 4 and img.shape[-1] > 1:
-                    img = img[..., 0]
-                    img = img[..., np.newaxis]
-                img = loader.reassemble(
-                    image=img, patch_count=data["patch_count"], padding=data["padding"]
-                ).squeeze()
+
+                image = image_batches["image"]
                 output_files.save_rgb_label(
-                    name=name, label=lbl, image=img, subfolder=output_files.EVAL
+                    name=name, label=lbl, image=image, subfolder=output_files.EVAL
                 )
                 output_files.save_rgb_label(
                     name=name, label=lbl, subfolder=output_files.EVAL

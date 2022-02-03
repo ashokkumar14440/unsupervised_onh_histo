@@ -228,12 +228,18 @@ class OutputFiles:
             assert label.shape[-1] == 1
             label = label.squeeze()
         assert label.ndim == 2
+        if image is not None:
+            if image.ndim == 2:
+                image = image[..., np.newaxis]
+            if image.shape[-1] == 1:
+                image = np.tile(image, (1, 1, 3))
         rgb = label2rgb(label, image=image, colors=self._label_colors, kind="overlay")
         if subfolder is None:
             subfolder = self.RENDER
         suffix = "rgb_label"
         if image is not None:
             suffix += "_overlay"
+
         path = self._compose_path(subfolder, name, suffix)
         iutil.save(path, rgb)
 
