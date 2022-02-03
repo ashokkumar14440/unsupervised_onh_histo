@@ -1,13 +1,13 @@
 from pathlib import Path, PurePath
-from typing import Any, Dict, Union, Optional
+from typing import Any, Dict, Optional, Union
 
 import numpy as np
 import torch
-import loss
-import utils
 
 import architecture as arch
 import data
+import loss
+import utils
 
 PathLike = Union[str, Path, PurePath]
 

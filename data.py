@@ -1,9 +1,9 @@
 from pathlib import Path, PurePath
-from typing import List, Union, Dict, Any, Optional
+from typing import Any, Dict, List, Optional, Union
 
-from PIL import Image  # TODO use image utils
-import torch
 import numpy as np
+import torch
+from PIL import Image  # TODO use image utils
 
 import inc.python_image_utilities.image_util as iutil
 import preprocessing as pre

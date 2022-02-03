@@ -1,5 +1,5 @@
-from pathlib import Path, PurePath
 import pickle
+from pathlib import Path, PurePath
 from typing import Union
 
 import numpy as np
