@@ -1,11 +1,15 @@
+name: image-utils
 channels:
   - conda-forge
   - defaults
 dependencies:
-  - noise
   - numpy
+  - opencv
   - pillow
   - python
   - pip
+  - scikit-image
+  - scipy
+  - tifffile
   - pip:
-      - opencv-python
+      - suffix-trees
