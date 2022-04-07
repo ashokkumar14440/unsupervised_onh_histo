@@ -166,8 +166,8 @@ class EvalDataLoader(torch.utils.data.DataLoader):
             collate_fn=self._collate,
         )
 
-    def reassemble(self, image: np.ndarray, patch_count, padding):
-        return self.dataset.reassemble(image, patch_count, padding)
+    def reassemble(self, image: np.ndarray, image_shape):
+        return self.dataset.reassemble(image, image_shape)
 
     @staticmethod
     def _collate(data: List[Dict[str, Any]]) -> Dict[str, Any]:
