@@ -1,20 +1,19 @@
 name: iic
 channels:
-    - defaults
-    - anaconda
-    - conda-forge
-    - pytorch
+  - anaconda
+  - conda-forge
+  - pytorch
 dependencies:
-    - pandas=1.0.1
-    - python=3.7.6
-    - pyyaml=5.2
-    - scikit-image=0.16.2
-    - scikit-learn=0.22.1
-    - tqdm=4.42.0
-    - pytorch=1.4.0
-    - torchvision=0.5.0
-    - pip=19.3.1
-    - pip:
-          - opencv-python==4.1.2.30
-          - libtiff==0.4.2
-          - suffix-trees=0.3.0
+  - pandas=1.0.1
+  - opencv=4.5.5
+  - pillow=9.1.0
+  - pip=19.3.1
+  - python=3.7.6
+  - pytorch=1.4.0
+  - pyyaml=5.2
+  - scikit-image=0.16.2
+  - scipy=1.7.3
+  - torchvision=0.5.0
+  - tifffile=2022.3.25
+  - pip:
+      - suffix-trees==0.3.0

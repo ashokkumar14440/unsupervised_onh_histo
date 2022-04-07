@@ -130,7 +130,8 @@ class EvalDataset(ImageFolderDataset):
         out = self._load_data(index)
         if out["image"].ndim == 2:
             out["image"] = out["image"][..., np.newaxis]
-        (patches, patch_count, out_padding) = iutil.patchify(
+        image_shape = out["image"].shape
+        patches = iutil.patchify_image(
             out["image"], patch_shape=(self._input_size, self._input_size)
         )
         patches = patches.squeeze()
@@ -140,8 +141,7 @@ class EvalDataset(ImageFolderDataset):
             batch.append(t["image"])
         batch = torch.stack(batch, dim=0)
         out["image"] = batch
-        out["patch_count"] = patch_count
-        out["padding"] = out_padding
+        out["image_shape"] = image_shape
 
         for k, v in out.items():
             assert k is not None
@@ -149,9 +149,9 @@ class EvalDataset(ImageFolderDataset):
         return out
 
     @staticmethod
-    def reassemble(image: np.ndarray, patch_count, padding):
-        return iutil.unpatchify(
-            patches=image, patch_counts=patch_count, padding=padding
+    def reassemble(image: np.ndarray, image_shape):
+        return iutil.unpatchify_image(
+            patches=image, image_shape=image_shape, offset=(0, 0)
         )
 
 

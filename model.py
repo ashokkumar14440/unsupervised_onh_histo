@@ -99,7 +99,7 @@ class Model:
                 lbl = lbl.argmax(axis=1).astype(np.uint8)
                 lbl = lbl[..., np.newaxis]
                 lbl = loader.reassemble(
-                    image=lbl, patch_count=out["patch_count"], padding=out["padding"]
+                    image=lbl, image_shape=data["image_shape"]
                 ).squeeze()
                 name = PurePath(out["file_path"]).stem
                 output_files.save_label(
@@ -112,7 +112,7 @@ class Model:
                     img = img[..., 0]
                     img = img[..., np.newaxis]
                 img = loader.reassemble(
-                    image=img, patch_count=data["patch_count"], padding=data["padding"]
+                    image=img, image_shape=data["image_shape"]
                 ).squeeze()
                 output_files.save_rgb_label(
                     name=name, label=lbl, image=img, subfolder=output_files.EVAL
