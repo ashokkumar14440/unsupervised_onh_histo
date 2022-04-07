@@ -1,7 +1,7 @@
-from pathlib import Path, PurePath
 import pickle
-from typing import Dict, List, Optional, Union, Tuple
 import shutil
+from pathlib import Path, PurePath
+from typing import Dict, List, Optional, Tuple, Union
 
 import matplotlib
 import matplotlib.pyplot as plt
@@ -12,7 +12,6 @@ from skimage.color import label2rgb
 
 import inc.python_image_utilities.image_util as iutil
 import utils
-
 
 matplotlib.use("Agg")
 
@@ -228,12 +227,18 @@ class OutputFiles:
             assert label.shape[-1] == 1
             label = label.squeeze()
         assert label.ndim == 2
+        if image is not None:
+            if image.ndim == 2:
+                image = image[..., np.newaxis]
+            if image.shape[-1] == 1:
+                image = np.tile(image, (1, 1, 3))
         rgb = label2rgb(label, image=image, colors=self._label_colors, kind="overlay")
         if subfolder is None:
             subfolder = self.RENDER
         suffix = "rgb_label"
         if image is not None:
             suffix += "_overlay"
+
         path = self._compose_path(subfolder, name, suffix)
         iutil.save(path, rgb)
 
