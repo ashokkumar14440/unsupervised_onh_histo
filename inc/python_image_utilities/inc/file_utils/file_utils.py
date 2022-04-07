@@ -90,6 +90,7 @@ def generate_file_names(
     indices: Optional[Iterable[Any]] = None,
     delimiter: str = "_",
     folder: Optional[PathLike] = None,
+    make_indices_prefixed: bool = False,
 ) -> List[PurePath]:
     """Generates a list of file names from a supplied name and indices. The
     name parts are joined by a delimiter into a base name. The indices are then
@@ -107,7 +108,7 @@ def generate_file_names(
 
     Arguments:
 
-    "base_name_parts": An iterable of objects that can be converted to string
+    "name": An iterable of objects that can be converted to string
     using str(). These will be joined together using the delimiter to form a
     base name.
 
@@ -122,6 +123,9 @@ def generate_file_names(
     indices.
 
     "folder": A PurePath object to a folder location. This is not checked.
+
+    "make_indices_prefixed": A bool that determines whether indices should come
+    after (false, default) or before (true) the other filename features.
 
     Returns:
 
@@ -140,7 +144,10 @@ def generate_file_names(
     if name is None or name == "":
         index_fn = lambda x: [x]
     else:
-        index_fn = lambda x: [name, x]
+        if make_indices_prefixed:
+            index_fn = lambda x: [x, name]
+        else:
+            index_fn = lambda x: [name, x]
 
     if indices is not None:
         indices = [str(i) for i in indices]

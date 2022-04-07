@@ -103,6 +103,14 @@ class Test(unittest.TestCase):
         names = generate_file_names(ext=".txt", indices=INDICES, folder=FOLDER)
         self.assertEqual(names, RESULT)
 
+        INDICES = list(range(1, 4))
+        RESULT = ["1_file_1.txt", "2_file_1.txt", "3_file_1.txt"]
+        RESULT = [PurePath(r) for r in RESULT]
+        names = generate_file_names(
+            BASE_NAME, ".txt", indices=INDICES, make_indices_prefixed=True
+        )
+        self.assertEqual(names, RESULT)
+
         with self.assertRaises(ValueError):
             names = generate_file_names(ext=".txt")
 
