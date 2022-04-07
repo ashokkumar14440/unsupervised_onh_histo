@@ -1,7 +1,7 @@
 import functools
-from pathlib import Path, PurePath
 import pickle
 import sys
+from pathlib import Path, PurePath
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
@@ -9,7 +9,6 @@ import torch
 import torch.nn.functional as F
 
 import utils
-
 
 PathLike = Union[Path, PurePath, str]
 

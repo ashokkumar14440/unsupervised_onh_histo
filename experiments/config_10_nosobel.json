@@ -1,0 +1,114 @@
+{
+  "segmentation": {
+    "architecture": {
+      "trunk": {
+        "parameters": {
+          "convolution_size": 3,
+          "padding": 1,
+          "stride": 1,
+          "batch_norm": true,
+          "batch_norm_tracking": true
+        },
+        "structure": [
+          [64, 1],
+          [128, 1],
+          ["M", null],
+          [256, 1],
+          [256, 1],
+          [512, 2],
+          [512, 2]
+        ]
+      },
+      "heads": {
+        "subhead_count": 3,
+        "info": [
+          {
+            "label": "A",
+            "class_count": 50
+          },
+          {
+            "label": "B",
+            "class_count": 10,
+            "primary": true
+          }
+        ]
+      }
+    },
+    "preprocessor": {
+      "prescale_all": false,
+      "prescale_factor": 0.33,
+      "jitter_brightness": 0.4,
+      "jitter_contrast": 0.4,
+      "jitter_saturation": 0.4,
+      "jitter_hue": 0.125
+    },
+    "transformations": {
+      "flip_horizontal_probability": 0.5,
+      "use_random_affine": true,
+      "rotation_range": [-30.0, 30.0],
+      "shear_range": [-10.0, 10.0],
+      "scale_range": [0.8, 1.2]
+    },
+    "training": {
+      "batch_size": 120,
+      "shuffle": true,
+      "num_epochs": 2500,
+      "validation_mode": "IID",
+      "eval_mode": "hung",
+      "loss": {
+        "lambs": {
+          "A": 1.0,
+          "B": 1.5
+        },
+        "use_uncollapsed": true,
+        "half_T_side_dense": 10,
+        "half_T_side_sparse_min": 0,
+        "half_T_side_sparse_max": 0
+      }
+    },
+    "dataset": {
+      "id": "10_nosobel",
+      "root": "./datasets/test",
+      "extensions": [".png", ".jpg"],
+      "parameters": {
+        "is_rgb": false,
+        "use_rgb": false,
+        "do_sobelize": false,
+        "input_size": 128
+      }
+    },
+    "optimizer": {
+      "name": "Adam",
+      "learning_rate": 0.0001,
+      "schedule": [],
+      "multiplier": 0.1
+    },
+    "output": {
+      "force_training_restart": false,
+      "batch_print_freq": 5,
+      "rendering": {
+        "enabled": true,
+        "limit": 1
+      },
+      "label_colors": [
+        [255, 255, 109],
+        [36, 255, 36],
+        [219, 209, 0],
+        [0, 73, 73],
+        [255, 182, 119],
+        [73, 0, 146],
+        [0, 109, 219],
+        [182, 109, 255],
+        [109, 182, 255],
+        [182, 219, 255],
+        [146, 0, 0],
+        [146, 73, 0]
+      ],
+      "root": "./out",
+      "plot_name": "plots.png"
+    },
+    "debug": {
+      "enabled": false
+    }
+  }
+}

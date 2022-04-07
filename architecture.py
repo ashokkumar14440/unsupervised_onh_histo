@@ -1,10 +1,9 @@
-from pathlib import Path, PurePath
 import pickle
+from pathlib import Path, PurePath
 from typing import Any, Dict, List, Union
 
 import torch
 import torch.nn.functional as F
-
 
 PathLike = Union[Path, PurePath, str]
 

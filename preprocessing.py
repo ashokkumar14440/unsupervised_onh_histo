@@ -3,18 +3,18 @@ from typing import Callable, Optional, Union
 
 import cv2
 import numpy as np
-from PIL import Image
 import torch
 import torchvision.transforms as tvt
+from PIL import Image
 
+import utils
 from transforms import (
     get_center_start_subscript,
     get_random_start_subscript,
-    reshape_by_pad_crop,
     random_affine,
+    reshape_by_pad_crop,
     sobel_process,
 )
-import utils
 
 PathLike = Union[str, Path, PurePath]
 

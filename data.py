@@ -1,9 +1,9 @@
 from pathlib import Path, PurePath
-from typing import List, Union, Dict, Any, Optional
+from typing import Any, Dict, List, Optional, Union
 
-from PIL import Image  # TODO use image utils
-import torch
 import numpy as np
+import torch
+from PIL import Image  # TODO use image utils
 
 import inc.python_image_utilities.image_util as iutil
 import preprocessing as pre
@@ -120,13 +120,27 @@ class EvalDataset(ImageFolderDataset):
         input_size: int,
         preprocessor: pre.EvalImagePreprocessor,
         extensions: List[str] = [".png"],
+        batch_size: int = 128,
     ):
         super(EvalDataset, self).__init__(
             image_folder=eval_folder, preprocessor=preprocessor, extensions=extensions
         )
         self._input_size = input_size
+        self._batch_size = batch_size
+
+    def __len__(self):
+        return len(self._image_files)
 
     def __getitem__(self, index):
+        """
+        Returns a dict with the following:
+            1. "image": The original image content
+            2. "batches": A list of batches as dicts expected by the arch
+            3. "patch_count": Number of total patches in the overall image, used
+               by reassemble
+            4. "padding": Used by reassemble
+            5. "file_path": Path to the original file
+        """
         out = self._load_data(index)
         if out["image"].ndim == 2:
             out["image"] = out["image"][..., np.newaxis]
@@ -134,19 +148,25 @@ class EvalDataset(ImageFolderDataset):
             out["image"], patch_shape=(self._input_size, self._input_size)
         )
         patches = patches.squeeze()
-        batch = []
-        for p in patches:
-            t = self._pre.apply(image=p)
-            batch.append(t["image"])
-        batch = torch.stack(batch, dim=0)
-        out["image"] = batch
-        out["patch_count"] = patch_count
-        out["padding"] = out_padding
+        patches = [self._pre.apply(image=p)["image"] for p in patches]
+        batches = [
+            patches[i : i + self._batch_size]
+            for i in range(0, len(patches), self._batch_size)
+        ]
+        batches = [torch.stack(batch, dim=0) for batch in batches]
+        batches = [{"image": batch} for batch in batches]
+        out.update(
+            {"batches": batches, "patch_count": patch_count, "padding": out_padding,}
+        )
 
         for k, v in out.items():
             assert k is not None
             assert v is not None
         return out
+
+    def _batches(self, patches):
+        for index in range(0, len(patches), self._batch_size):
+            yield patches[index : index + self._batch_size]
 
     @staticmethod
     def reassemble(image: np.ndarray, patch_count, padding):

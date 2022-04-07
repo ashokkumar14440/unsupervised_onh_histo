@@ -197,3 +197,4 @@ datasets/**/*
 /out/**/*
 **/*.out
 **/*.err
+**/*.log
