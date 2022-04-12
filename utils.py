@@ -202,7 +202,7 @@ class OutputFiles:
             if subfolder is None:
                 subfolder = self.RENDER
             path = self._compose_path(subfolder, name, suffix)
-            iutil.save(path, image[:, :, slc])
+            iutil.save(image[:, :, slc], path)
 
     def save_label(self, name: str, label: np.ndarray, subfolder: Optional[str] = None):
         label = label.copy()
@@ -213,7 +213,7 @@ class OutputFiles:
         if subfolder is None:
             subfolder = self.RENDER
         path = self._compose_path(subfolder, name, "label")
-        iutil.save(path, label)
+        iutil.save(label, path)
 
     def save_rgb_label(
         self,
@@ -240,7 +240,7 @@ class OutputFiles:
             suffix += "_overlay"
 
         path = self._compose_path(subfolder, name, suffix)
-        iutil.save(path, rgb)
+        iutil.save(rgb, path)
 
     def save_statistics_plots(
         self,
