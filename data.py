@@ -132,7 +132,7 @@ class EvalDataset(ImageFolderDataset):
         image_info: utils.ImageInfo,
         preprocessor: pre.EvalImagePreprocessor,
         extensions: List[str] = [".png"],
-        batch_size: int = 128,
+        batch_size: int = 32,
     ):
         super(EvalDataset, self).__init__(
             image_folder=eval_folder,
