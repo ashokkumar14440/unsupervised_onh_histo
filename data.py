@@ -3,10 +3,10 @@ from typing import Any, Dict, List, Optional, Union
 
 import numpy as np
 import torch
-from PIL import Image  # TODO use image utils
 
 import inc.python_image_utilities.image_util as iutil
 import preprocessing as pre
+import utils
 
 PathLike = Union[str, Path, PurePath]
 
@@ -15,6 +15,7 @@ class ImageFolderDataset(torch.utils.data.Dataset):
     def __init__(
         self,
         image_folder: PathLike,
+        image_info: utils.ImageInfo,
         preprocessor: pre.ImagePreprocessor,
         extensions: List[str],
         label_folder: Optional[PathLike] = None,
@@ -30,6 +31,7 @@ class ImageFolderDataset(torch.utils.data.Dataset):
         else:
             label_files = None
         self._pre = preprocessor
+        self._image_info = image_info
         self._image_files = image_files
         self._label_files = label_files
 
@@ -57,12 +59,21 @@ class ImageFolderDataset(torch.utils.data.Dataset):
         return data
 
     def _load_image(self, file_path):
-        image = Image.open(str(file_path))
-        return np.asarray(image).astype(np.uint8)
+        force_rgb = self._image_info.is_rgb
+        image = iutil.load(path=file_path, force_rgb=force_rgb)
+        assert image.ndim == 3
+        image = image.astype(np.uint8)
+        if not force_rgb and image.ndim == 3:
+            image = image.squeeze()
+            assert image.ndim == 2
+        return image
 
     def _load_label(self, file_path: PathLike):
-        image = Image.open(str(file_path))
-        label = np.asarray(image).astype(np.int32)
+        image = iutil.load(path=file_path, force_rgb=False)
+        if image.ndim == 3:
+            image = image.squeeze()
+        assert image.ndim == 2
+        label = image.astype(np.int32)
         label[label == 255] = -1
         return label
 
@@ -118,12 +129,16 @@ class EvalDataset(ImageFolderDataset):
         self,
         eval_folder: PathLike,
         input_size: int,
+        image_info: utils.ImageInfo,
         preprocessor: pre.EvalImagePreprocessor,
         extensions: List[str] = [".png"],
         batch_size: int = 128,
     ):
         super(EvalDataset, self).__init__(
-            image_folder=eval_folder, preprocessor=preprocessor, extensions=extensions
+            image_folder=eval_folder,
+            image_info=image_info,
+            preprocessor=preprocessor,
+            extensions=extensions,
         )
         self._input_size = input_size
         self._batch_size = batch_size
