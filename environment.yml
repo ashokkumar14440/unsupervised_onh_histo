@@ -6,8 +6,8 @@ dependencies:
   - numpy
   - opencv
   - pillow
-  - python
   - pip
+  - python
   - scikit-image
   - scipy
   - tifffile
