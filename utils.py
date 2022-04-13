@@ -181,7 +181,7 @@ class OutputFiles:
         self, name: str, image: torch.Tensor, subfolder: Optional[str] = None
     ):
         out = self._to_numpy(image)
-        self.save_label(name, out, subfolder)
+        self.save_preprocess_demo_label(name, out, subfolder)
 
     def save_confidence_tensor(
         self, name: str, image: torch.Tensor, subfolder: Optional[str] = None
@@ -192,9 +192,11 @@ class OutputFiles:
         out = self._to_numpy(image)
         assert out.shape[0] <= 255
         out = out.argmax(axis=0).astype(np.uint8)
-        self.save_label(name, out, subfolder)
+        self.save_preprocess_demo_label(name, out, subfolder)
 
-    def save_image(self, name: str, image: np.ndarray, subfolder: Optional[str] = None):
+    def save_preprocess_demo_image(
+        self, name: str, image: np.ndarray, subfolder: Optional[str] = None
+    ):
         image = image.copy()
         assert image.ndim == 3
         assert image.shape[-1] == self._image_info.channel_count
@@ -204,7 +206,9 @@ class OutputFiles:
             path = self._compose_path(subfolder, name, suffix)
             iutil.save(image[:, :, slc], path)
 
-    def save_label(self, name: str, label: np.ndarray, subfolder: Optional[str] = None):
+    def save_preprocess_demo_label(
+        self, name: str, label: np.ndarray, subfolder: Optional[str] = None
+    ):
         label = label.copy()
         if label.ndim == 3:
             assert label.shape[-1] == 1

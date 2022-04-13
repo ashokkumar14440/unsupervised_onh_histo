@@ -249,11 +249,13 @@ class ImagePreprocessor:
 
     def _save_image(self, name: str, image: np.array):
         if self._render and self._counter.do_continue:
-            self._output.save_image(name, image)
+            assert self._output is not None
+            self._output.save_preprocess_demo_image(name, image)
 
     def _save_label(self, name: str, label: np.array):
         if self._render and self._counter.do_continue:
-            self._output.save_label(name, label)
+            assert self._output is not None
+            self._output.save_preprocess_demo_label(name, label)
 
 
 class TrainImagePreprocessor(ImagePreprocessor):

@@ -108,7 +108,7 @@ class Model:
                 lbl = evaluated_patches.argmax(axis=1).astype(np.uint8)
                 lbl = lbl[..., np.newaxis]
                 lbl = loader.reassemble(image=lbl, image_shape=image_shape).squeeze()
-                output_files.save_label(
+                output_files.save_preprocess_demo_label(
                     name=name, label=lbl, subfolder=output_files.EVAL
                 )
 
