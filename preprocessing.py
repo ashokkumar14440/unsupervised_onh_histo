@@ -85,7 +85,7 @@ class LabelMapper:
     def __init__(self, mapping_function: Optional[Callable] = None):
         self._mapping_function = mapping_function
 
-    def apply(self, label: np.array):
+    def apply(self, label: np.ndarray):
         if self._mapping_function is not None:
             return self._mapping_function(label)
         else:
@@ -100,14 +100,14 @@ class SimplePreprocessing:
         self._do_prescale = prescale_all
         self._prescale_factor = prescale_factor
 
-    def scale_data(self, image: np.array):
+    def scale_data(self, image: np.ndarray):
         if self._do_prescale:
             out = self._scale(image, dtype=np.float32, interp_mode=cv2.INTER_LINEAR)
         else:
             out = image
         return out
 
-    def scale_labels(self, image: np.array):
+    def scale_labels(self, image: np.ndarray):
         if self._do_prescale:
             out = self._scale(image, dtype=np.int32, interp_mode=cv2.INTER_NEAREST)
         else:
@@ -119,15 +119,15 @@ class SimplePreprocessing:
             image = image[..., np.newaxis]
         return image
 
-    def grayscale(self, image: np.array):
+    def grayscale(self, image: np.ndarray):
         if self._image_info.sobel:
             image = self._to_grayscale(image)
         return image
 
-    def scale_values(self, image: np.array):
+    def scale_values(self, image: np.ndarray):
         return image.astype(np.float32) / 255.0
 
-    def torchify(self, image: np.array):
+    def torchify(self, image: np.ndarray):
         return torch.from_numpy(image).permute(2, 0, 1).cuda()
 
     def sobelize(self, image: torch.Tensor):
@@ -135,7 +135,7 @@ class SimplePreprocessing:
             image = sobel_process(image)
         return image
 
-    def _scale(self, image: np.array, dtype, interp_mode):
+    def _scale(self, image: np.ndarray, dtype, interp_mode):
         image = image.astype(dtype)
         image = cv2.resize(
             image,
@@ -146,7 +146,7 @@ class SimplePreprocessing:
         )
         return image
 
-    def _to_grayscale(self, image: np.array):
+    def _to_grayscale(self, image: np.ndarray):
         assert image.ndim == 3
         if self._image_info.is_rgb:
             h, w, c = image.shape
@@ -183,20 +183,20 @@ class TransformPreprocessing(SimplePreprocessing):
         self._do_prescale = prescale_all
         self._prescale_factor = prescale_factor
 
-    def pad_crop(self, image: np.array, start_subscript) -> np.array:
+    def pad_crop(self, image: np.ndarray, start_subscript) -> np.ndarray:
         required_shape = self._get_required_shape(image)
         image = reshape_by_pad_crop(image, required_shape, start_subscript)
         return image
 
-    def get_random_start_subscript(self, image: np.array):
+    def get_random_start_subscript(self, image: np.ndarray):
         required_shape = self._get_required_shape(image)
         return get_random_start_subscript(image.shape, required_shape)
 
-    def get_center_start_subscript(self, image: np.array):
+    def get_center_start_subscript(self, image: np.ndarray):
         required_shape = self._get_required_shape(image)
         return get_center_start_subscript(image.shape, required_shape)
 
-    def color_jitter(self, image: np.array):
+    def color_jitter(self, image: np.ndarray):
         was_gray = False
         if image.shape[-1] == 1:
             was_gray = True
@@ -208,14 +208,14 @@ class TransformPreprocessing(SimplePreprocessing):
             image = image[..., np.newaxis]
         return image
 
-    def transform(self, image: np.array):
+    def transform(self, image: np.ndarray):
         image, _, inverse = self._transformation.apply(image)
         return image, inverse
 
-    def map_labels(self, label: np.array):
+    def map_labels(self, label: np.ndarray):
         return self._label_mapper.apply(label)
 
-    def _get_required_shape(self, image: np.array):
+    def _get_required_shape(self, image: np.ndarray):
         required_shape = [*self._image_info.perceived_shape, *image.shape[2:]]
         return required_shape
 
@@ -247,12 +247,12 @@ class ImagePreprocessor:
     def _apply_impl(self, **kwargs):
         return {}
 
-    def _save_image(self, name: str, image: np.array):
+    def _save_image(self, name: str, image: np.ndarray):
         if self._render and self._counter.do_continue:
             assert self._output is not None
             self._output.save_preprocess_demo_image(name, image)
 
-    def _save_label(self, name: str, label: np.array):
+    def _save_label(self, name: str, label: np.ndarray):
         if self._render and self._counter.do_continue:
             assert self._output is not None
             self._output.save_preprocess_demo_label(name, label)
@@ -266,8 +266,8 @@ class TrainImagePreprocessor(ImagePreprocessor):
     def _apply_impl(
         self,
         file_path: PathLike,
-        image: np.array,
-        label: Optional[np.array] = None,
+        image: np.ndarray,
+        label: Optional[np.ndarray] = None,
         **kwargs
     ):
         assert self._image_info.check_input_image(image)
@@ -328,8 +328,8 @@ class TestImagePreprocessor(ImagePreprocessor):
     def _apply_impl(
         self,
         file_path: PathLike,
-        image: np.array,
-        label: Optional[np.array] = None,
+        image: np.ndarray,
+        label: Optional[np.ndarray] = None,
         **kwargs
     ):
         assert self._image_info.check_input_image(image)
