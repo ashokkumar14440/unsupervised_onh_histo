@@ -209,7 +209,9 @@ def generate_convolution(sobel_filter):
     filt = torch.from_numpy(sobel_filter)
     filt = filt.cuda().float()
     filt = filt.unsqueeze(0).unsqueeze(0)
-    conv = nn.Conv2d(1, 1, kernel_size=3, padding=1, bias=False)
+    conv = nn.Conv2d(
+        1, 1, kernel_size=3, stride=1, padding=1, padding_mode="replicate", bias=False
+    )
     conv.weight = nn.Parameter(filt, requires_grad=False)
     return conv
 

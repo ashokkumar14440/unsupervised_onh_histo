@@ -291,8 +291,8 @@ class TrainImagePreprocessor(ImagePreprocessor):
         t_image = self._pre.grayscale(t_image)
         t_image = self._pre.scale_values(t_image)
         t_image = self._pre.torchify(t_image)
-        t_image, affine_inverse = self._pre.transform(t_image)
         t_image = self._pre.sobelize(t_image)
+        t_image, affine_inverse = self._pre.transform(t_image)
         np_t_image = t_image.cpu().detach().numpy().transpose(1, 2, 0)
         assert self._image_info.check_output_image(np_t_image)
         t_name = name + "_t"
