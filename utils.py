@@ -138,7 +138,7 @@ class OutputFiles:
         self,
         root_path: PathLike,
         image_info: ImageInfo,
-        extension: str = ".png",
+        extension: str = ".tif",
         label_colors: Optional[List[List[int]]] = None,
     ):
         root = PurePath(root_path)
