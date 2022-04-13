@@ -40,8 +40,9 @@ def evaluate(config):
     )
     eval_dataset = data.EvalDataset(
         eval_folder=image_folder,
-        preprocessor=preprocessor,
         input_size=heads_info.input_size,
+        image_info=image_info,
+        preprocessor=preprocessor,
         extensions=config.dataset.extensions,
     )
     eval_dataloader = data.EvalDataLoader(dataset=eval_dataset)

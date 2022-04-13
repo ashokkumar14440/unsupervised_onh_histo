@@ -104,6 +104,7 @@ def train(config):
     )
     train_dataset = data.ImageFolderDataset(
         image_folder=image_folder,
+        image_info=image_info,
         preprocessor=train_prep,
         extensions=config.dataset.extensions,
         label_folder=label_folder,
@@ -124,6 +125,7 @@ def train(config):
     )
     test_dataset = data.ImageFolderDataset(
         image_folder=image_folder,
+        image_info=image_info,
         preprocessor=test_prep,
         extensions=config.dataset.extensions,
         label_folder=label_folder,
