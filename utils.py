@@ -333,7 +333,7 @@ class BatchStatistics:
     def add(self, values: dict):
         names = list(values.keys())
         if self._data is None:
-            self._data = pd.DataFrame(columns=names)
+            self._data = pd.DataFrame(columns=names, dtype=object)
         assert set(names) == set(self._data.columns)
         self._data.loc[self.count] = values
 
@@ -386,7 +386,7 @@ class EpochStatistics:
                 assert k not in values
                 values[k] = v
         if self._data is None:
-            self._data = pd.DataFrame(columns=list(values.keys()))
+            self._data = pd.DataFrame(columns=list(values.keys()), dtype=object)
         assert set(values.keys()) == set(self._data.columns)
         self._data.loc[self.count] = values
 
