@@ -66,6 +66,9 @@
         "half_T_side_sparse_max": 0
       }
     },
+    "evaluating": {
+      "batch_size": 32
+    },
     "dataset": {
       "id": "10_nosobel",
       "root": "./datasets/test",

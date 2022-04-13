@@ -44,6 +44,7 @@ def evaluate(config):
         image_info=image_info,
         preprocessor=preprocessor,
         extensions=config.dataset.extensions,
+        batch_size=config.evaluating.batch_size,
     )
     eval_dataloader = data.EvalDataLoader(dataset=eval_dataset)
     model.evaluate(output_files=output_files, loader=eval_dataloader)
