@@ -237,6 +237,7 @@ class OutputFiles:
             if image.shape[-1] == 1:
                 image = np.tile(image, (1, 1, 3))
         rgb = label2rgb(label, image=image, colors=self._label_colors, kind="overlay")
+        rgb = iutil.to_dtype(rgb, dtype=np.uint8)
         if subfolder is None:
             subfolder = self.RENDER
         suffix = "rgb_label"
