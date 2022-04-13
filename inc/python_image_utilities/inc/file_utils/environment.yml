@@ -1,6 +1,0 @@
-channels:
-  - defaults
-dependencies:
-  - pip
-  - pip:
-      - suffix-trees

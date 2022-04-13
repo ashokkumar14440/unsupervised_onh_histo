@@ -1,10 +1,10 @@
 import functools
 import inspect
 import itertools
-from math import floor, isinf, isnan
+from math import isinf, isnan
 from pathlib import Path, PurePath
 from random import shuffle
-from typing import Callable, List, Optional, Sequence, Tuple, Union
+from typing import Callable, Optional, Sequence, Tuple, Union
 
 import cv2
 import numpy as np
@@ -12,8 +12,6 @@ import scipy.stats
 import skimage
 import tifffile.tifffile as tf
 from PIL import Image
-
-from inc.file_utils.file_utils import get_contents
 
 """
 This library is intended for 2D images, and stacks of 2D images. It is not

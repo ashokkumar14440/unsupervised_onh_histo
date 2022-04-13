@@ -128,17 +128,28 @@ class Test(unittest.TestCase):
         actual = unpatchify_image(actual, expected.shape, OFFSET)
         np.testing.assert_array_equal(actual, expected)
 
+        # 2D, fully random, roundtrip
+        IMAGE_SHAPE = np.random.randint(77, 311, 2).reshape((2)).tolist()
+        IMAGE_SHAPE.append(1)
+        IMAGE_SHAPE = tuple(IMAGE_SHAPE)
+        OFFSET = tuple(np.random.randint(7, 31, 2).reshape((2)).tolist())
+        PATCH_SHAPE = tuple(np.random.randint(7, 31, 2).reshape((2)).tolist())
+        expected = np.random.rand(*IMAGE_SHAPE)
+        actual = patchify_image(expected, PATCH_SHAPE, OFFSET)
+        actual = unpatchify_image(actual, expected.shape, OFFSET)
+        np.testing.assert_array_equal(actual, expected)
+
     def test_patchify_image(self):
         # 1D, even division, along X
-        im = np.array([0, 1, 2, 3])[..., np.newaxis, np.newaxis]
-        actual = patchify_image(im, (2, 1))
-        expected = np.array([[0, 1], [2, 3]])[..., np.newaxis, np.newaxis]
+        im = np.array([[0, 1, 2, 3, 4, 5]])[..., np.newaxis]
+        actual = patchify_image(im, (1, 2))
+        expected = np.array([[[0, 1]], [[2, 3]], [[4, 5]]])[..., np.newaxis]
         np.testing.assert_array_equal(actual, expected)
 
         # # 1D, even division, along Y
-        im = np.array([[0, 1, 2, 3]])[..., np.newaxis]
-        actual = patchify_image(im, (1, 2))
-        expected = np.array([[[0, 1]], [[2, 3]]])[..., np.newaxis]
+        im = np.array([0, 1, 2, 3, 4, 5])[..., np.newaxis, np.newaxis]
+        actual = patchify_image(im, (2, 1))
+        expected = np.array([[0, 1], [2, 3], [4, 5]])[..., np.newaxis, np.newaxis]
         np.testing.assert_array_equal(actual, expected)
 
         # # 1D, uneven division, along X
