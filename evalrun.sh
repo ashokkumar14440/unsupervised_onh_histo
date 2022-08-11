@@ -14,4 +14,4 @@ conda activate ashok7
 ml cuda10.0/toolkit
 
 export CUDA_VISIBLE_DEVICES=0,1,2,3
-python -u train.py --config config.json
+python -u eval.py --config config.json

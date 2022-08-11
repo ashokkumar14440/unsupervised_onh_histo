@@ -68,7 +68,7 @@
     },
     "dataset": {
       "id": 555,
-      "root": "./datasets/test_shrunk",
+      "root": "/data/project/Downs-Lab/prelineation",
       "extensions": [".png", ".jpg"],
       "parameters": {
         "is_rgb": false,

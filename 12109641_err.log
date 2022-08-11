@@ -1,0 +1,24 @@
+Traceback (most recent call last):
+  File "eval.py", line 53, in <module>
+    interface(config_file_path=arguments.config_file_path)
+  File "eval.py", line 16, in interface
+    evaluate(config)
+  File "eval.py", line 48, in evaluate
+    model.evaluate(output_files=output_files, loader=eval_dataloader)
+  File "/data/user/home/ashok7/segmentation/unsupervised_onh_histo/model.py", line 96, in evaluate
+    out = self._net(data, head=self._heads_info.primary_head)
+  File "/home/ashok7/.conda/envs/ashok7/lib/python3.7/site-packages/torch/nn/modules/module.py", line 1102, in _call_impl
+    return forward_call(*input, **kwargs)
+  File "/home/ashok7/.conda/envs/ashok7/lib/python3.7/site-packages/torch/nn/parallel/data_parallel.py", line 169, in forward
+    return self.gather(outputs, self.output_device)
+  File "/home/ashok7/.conda/envs/ashok7/lib/python3.7/site-packages/torch/nn/parallel/data_parallel.py", line 181, in gather
+    return gather(outputs, output_device, dim=self.dim)
+  File "/home/ashok7/.conda/envs/ashok7/lib/python3.7/site-packages/torch/nn/parallel/scatter_gather.py", line 78, in gather
+    res = gather_map(outputs)
+  File "/home/ashok7/.conda/envs/ashok7/lib/python3.7/site-packages/torch/nn/parallel/scatter_gather.py", line 70, in gather_map
+    for k in out)
+  File "/home/ashok7/.conda/envs/ashok7/lib/python3.7/site-packages/torch/nn/parallel/scatter_gather.py", line 70, in <genexpr>
+    for k in out)
+  File "/home/ashok7/.conda/envs/ashok7/lib/python3.7/site-packages/torch/nn/parallel/scatter_gather.py", line 73, in gather_map
+    return type(out)(map(gather_map, zip(*outputs)))
+TypeError: expected sequence object with len >= 0 or a single integer

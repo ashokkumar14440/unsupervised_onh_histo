@@ -1,0 +1,26 @@
+unable to find label mapper, using identity mapping
+epoch 1
+  head A
+    batch 1/1
+  head B
+    batch 1/1
+epoch 2
+  head A
+    batch 1/1
+  head B
+    batch 1/1
+epoch 3
+  head A
+    batch 1/1
+  head B
+    batch 1/1
+epoch 4
+  head A
+    batch 1/1
+  head B
+    batch 1/1
+epoch 5
+  head A
+    batch 1/1
+  head B
+    batch 1/1
