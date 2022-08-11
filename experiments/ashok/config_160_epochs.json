@@ -52,7 +52,7 @@
     "training": {
       "batch_size": 120,
       "shuffle": true,
-      "num_epochs": 500,
+      "num_epochs": 160,
       "validation_mode": "IID",
       "eval_mode": "hung",
       "loss": {
@@ -70,13 +70,13 @@
       "batch_size": 32
     },
     "dataset": {
-      "id": "nosobel500Temp",
-      "root": "/data/project/Downs-Lab/temp/",
+      "id": 160,
+      "root": "/data/project/Downs-Lab/prelineation/",
       "extensions": [".png", ".jpg"],
       "parameters": {
         "is_rgb": false,
         "use_rgb": false,
-        "do_sobelize": false,
+        "do_sobelize": true,
         "input_size": 128
       }
     },

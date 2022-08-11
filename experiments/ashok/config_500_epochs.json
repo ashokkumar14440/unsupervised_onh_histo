@@ -70,13 +70,13 @@
       "batch_size": 32
     },
     "dataset": {
-      "id": "nosobel500Temp",
-      "root": "/data/project/Downs-Lab/temp/",
+      "id": 500,
+      "root": "/data/project/Downs-Lab/prelineation/",
       "extensions": [".png", ".jpg"],
       "parameters": {
         "is_rgb": false,
         "use_rgb": false,
-        "do_sobelize": false,
+        "do_sobelize": true,
         "input_size": 128
       }
     },
